@@ -4,8 +4,8 @@ const orderSchema = new mongoose.Schema({
   table: {
     type: Number,
     required: true,
-    min: 1,
-    max: 1000 // reasonable upper limit
+    min: 0,
+    max: 1000 // reasonable upper limit, 0 for parcel
   },
   items: [{
     foodItem: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodItem', required: true },

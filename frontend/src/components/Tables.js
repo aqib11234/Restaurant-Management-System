@@ -245,7 +245,9 @@ function Tables() {
             onClick={() => handleViewOrder(table)}
           >
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-white">Table {table.number}</h3>
+              <h3 className="text-xl font-bold text-white">
+                {table.number === 0 ? 'Parcel' : `Table ${table.number}`}
+              </h3>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 table.order
                   ? 'bg-orange-500 text-white'
@@ -538,7 +540,7 @@ function Tables() {
           <div className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl border border-gray-700 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-3xl font-bold text-white">
-                Order Details - Table {selectedTable.number}
+                Order Details - {selectedTable.number === 0 ? 'Parcel' : `Table ${selectedTable.number}`}
               </h2>
               <button
                 onClick={() => setShowOrderDetails(false)}

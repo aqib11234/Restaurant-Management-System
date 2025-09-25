@@ -5,6 +5,7 @@ import api from '../services/api';
 function OrderPlacement() {
   const [cart, setCart] = useState([]);
   const [tableNumber, setTableNumber] = useState('');
+  const [isParcel, setIsParcel] = useState(false);
   const [foodItems, setFoodItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,17 +77,22 @@ function OrderPlacement() {
   };
 
   const handlePlaceOrder = async () => {
-    if (!tableNumber) {
-      setError('Please enter a table number');
+    if (!isParcel && !tableNumber) {
+      setError('Please enter a table number or select parcel order');
       return;
     }
 
-    const tableNum = parseInt(tableNumber);
-    const totalTables = parseInt(localStorage.getItem('totalTables')) || 20;
+    let tableNum;
+    if (isParcel) {
+      tableNum = 0;
+    } else {
+      tableNum = parseInt(tableNumber);
+      const totalTables = parseInt(localStorage.getItem('totalTables')) || 20;
 
-    if (tableNum < 1 || tableNum > totalTables) {
-      setError(`Table number not available. Available tables: 1-${totalTables}`);
-      return;
+      if (tableNum < 1 || tableNum > totalTables) {
+        setError(`Table number not available. Available tables: 1-${totalTables}`);
+        return;
+      }
     }
 
     if (cart.length === 0) {
@@ -98,18 +104,20 @@ function OrderPlacement() {
       setIsSubmitting(true);
       setError('');
 
-      // Check if table already has an active order
-      const ordersResponse = await api.getOrders();
-      const existingOrder = ordersResponse.orders.find(order =>
-        order.table === tableNum &&
-        order.status !== 'completed' &&
-        order.status !== 'cancelled'
-      );
+      // Check if table already has an active order (skip for parcel)
+      if (!isParcel) {
+        const ordersResponse = await api.getOrders();
+        const existingOrder = ordersResponse.orders.find(order =>
+          order.table === tableNum &&
+          order.status !== 'completed' &&
+          order.status !== 'cancelled'
+        );
 
-      if (existingOrder) {
-        setError(`Table ${tableNumber} already has an active order. Please use the Tables page to add items to existing orders.`);
-        setIsSubmitting(false);
-        return;
+        if (existingOrder) {
+          setError(`Table ${tableNumber} already has an active order. Please use the Tables page to add items to existing orders.`);
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       const orderData = {
@@ -128,6 +136,7 @@ function OrderPlacement() {
       // Clear the form immediately on success
       setCart([]);
       setTableNumber('');
+      setIsParcel(false);
       setError('');
 
       // Show success message
@@ -222,14 +231,33 @@ function OrderPlacement() {
             )}
             
             <div className="mb-4">
-              <label className="block text-gray-300 text-sm mb-2">Table Number</label>
-              <input
-                type="number"
-                placeholder="Enter table number"
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
-                value={tableNumber}
-                onChange={(e) => setTableNumber(e.target.value)}
-              />
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  id="parcelOrder"
+                  checked={isParcel}
+                  onChange={(e) => {
+                    setIsParcel(e.target.checked);
+                    if (e.target.checked) {
+                      setTableNumber('');
+                    }
+                  }}
+                  className="mr-2"
+                />
+                <label htmlFor="parcelOrder" className="text-gray-300 text-sm">Parcel Order (Takeaway)</label>
+              </div>
+              {!isParcel && (
+                <>
+                  <label className="block text-gray-300 text-sm mb-2">Table Number</label>
+                  <input
+                    type="number"
+                    placeholder="Enter table number"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value)}
+                  />
+                </>
+              )}
             </div>
 
             {cart.length === 0 ? (

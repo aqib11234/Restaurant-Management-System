@@ -148,7 +148,7 @@ function SalesHistory() {
           doc.addPage();
           yPosition = 20;
         }
-        doc.text(`  ${formatDate(order.createdAt)} ${formatTime(order.createdAt)} - Table ${order.table} - PKR ${Math.round(order.total)}`, 40, yPosition);
+        doc.text(`  ${formatDate(order.createdAt)} ${formatTime(order.createdAt)} - ${order.table === 0 ? 'Parcel' : `Table ${order.table}`} - PKR ${Math.round(order.total)}`, 40, yPosition);
         yPosition += 6;
       });
 
@@ -179,7 +179,7 @@ function SalesHistory() {
         allOrders.push({
           Period: group.displayName,
           'Order Time': formatDate(order.createdAt) + ' ' + formatTime(order.createdAt),
-          'Table No': order.table,
+          'Table No': order.table === 0 ? 'Parcel' : order.table,
           'Order ID': order._id.toString().slice(-6),
           'Total Price': Math.round(order.total),
           Status: order.status
@@ -369,7 +369,7 @@ function SalesHistory() {
                                 <td className="px-4 py-3 text-white">
                                   {formatDate(order.createdAt)} {formatTime(order.createdAt)}
                                 </td>
-                                <td className="px-4 py-3 text-white">Table {order.table}</td>
+                                <td className="px-4 py-3 text-white">{order.table === 0 ? 'Parcel' : `Table ${order.table}`}</td>
                                 <td className="px-4 py-3 text-gray-300 font-mono">
                                   #{order.orderId.toString().slice(-6)}
                                 </td>

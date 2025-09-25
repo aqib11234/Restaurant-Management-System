@@ -67,12 +67,12 @@ router.post('/', authenticateToken, checkRateLimit, async (req, res) => {
     const { table, items, total } = req.body;
 
     // Validation
-    if (!table || !items || !Array.isArray(items) || items.length === 0 || !total) {
+    if (table == null || !items || !Array.isArray(items) || items.length === 0 || total == null) {
       return res.status(400).json({ message: 'Invalid order data' });
     }
 
     const tableNum = parseInt(table);
-    if (isNaN(tableNum) || tableNum < 1 || tableNum > 1000) {
+    if (isNaN(tableNum) || tableNum < 0 || tableNum > 1000) {
       return res.status(400).json({ message: 'Invalid table number' });
     }
 
