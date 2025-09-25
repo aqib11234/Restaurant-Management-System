@@ -1,0 +1,194 @@
+import React, { useState, useEffect } from 'react';
+import { Check, X, Loader2 } from 'lucide-react';
+import api from '../services/api';
+
+function OrderTracking() {
+  const [orders, setOrders] = useState([]);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(30); // seconds
+
+  useEffect(() => {
+    fetchOrders();
+    // Set up polling for real-time updates
+    const interval = setInterval(fetchOrders, refreshInterval * 1000);
+    return () => clearInterval(interval);
+  }, [filterStatus, refreshInterval]);
+
+  const fetchOrders = async () => {
+    try {
+      const params = filterStatus !== 'all' ? { status: filterStatus } : {};
+      const response = await api.getOrders(params);
+      setOrders(response);
+      setError('');
+    } catch (err) {
+      setError('Failed to fetch orders');
+      console.error('Error fetching orders:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await api.updateOrderStatus(orderId, newStatus);
+      await fetchOrders(); // Refresh orders after update
+      
+      // Show success message
+      const successMsg = document.createElement('div');
+      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+      successMsg.textContent = 'Order status updated successfully!';
+      document.body.appendChild(successMsg);
+      setTimeout(() => successMsg.remove(), 3000);
+    } catch (err) {
+      setError('Failed to update order status');
+      console.error('Error updating order status:', err);
+    }
+  };
+
+  const formatTime = (timeString) => {
+    return new Date(timeString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'text-yellow-500';
+      case 'preparing':
+        return 'text-blue-500';
+      case 'ready':
+        return 'text-green-500';
+      case 'delivered':
+        return 'text-gray-500';
+      case 'cancelled':
+        return 'text-red-500';
+      default:
+        return 'text-gray-500';
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Order Tracking</h1>
+          {isLoading && (
+            <p className="text-gray-400 mt-2 flex items-center">
+              <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              Refreshing orders...
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-gray-300">Auto-refresh:</label>
+            <select
+              className="bg-gray-800 border border-gray-700 rounded-lg text-white px-3 py-2 focus:border-green-500 focus:outline-none"
+              value={refreshInterval}
+              onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            >
+              <option value="15">15s</option>
+              <option value="30">30s</option>
+              <option value="60">1min</option>
+            </select>
+          </div>
+          <select
+            className="bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:border-green-500 focus:outline-none"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All Orders</option>
+            <option value="pending">Pending</option>
+            <option value="preparing">Preparing</option>
+            <option value="ready">Ready</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg text-red-200">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-6">
+        {orders.length === 0 ? (
+          <div className="text-center text-gray-400 py-8">
+            No orders found
+          </div>
+        ) : (
+          orders.map(order => (
+            <div key={order._id} className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-white font-semibold text-lg mb-1">
+                    Table {order.table}
+                  </h3>
+                  <p className="text-gray-400">
+                    Ordered at {formatTime(order.createdAt)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${getStatusColor(order.status)}`}>
+                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                  </span>
+                  {order.status === 'pending' && (
+                    <button
+                      onClick={() => updateOrderStatus(order._id, 'preparing')}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
+                    >
+                      Start Preparing
+                    </button>
+                  )}
+                  {order.status === 'preparing' && (
+                    <button
+                      onClick={() => updateOrderStatus(order._id, 'ready')}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm"
+                    >
+                      Mark Ready
+                    </button>
+                  )}
+                  {order.status === 'ready' && (
+                    <button
+                      onClick={() => updateOrderStatus(order._id, 'delivered')}
+                      className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm"
+                    >
+                      Mark Delivered
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {order.items.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center text-gray-300">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400">{item.quantity}x</span>
+                      <span>{item.name}</span>
+                    </div>
+                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-gray-700 mt-4 pt-4 flex justify-between items-center">
+                <span className="text-white font-medium">Total:</span>
+                <span className="text-green-500 font-bold text-lg">
+                  ${order.total.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default OrderTracking;
