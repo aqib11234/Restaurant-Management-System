@@ -1,0 +1,27 @@
+{
+    "name": "restaurant-management-system",
+    "version": "1.0.0",
+    "description": "Multi-tenant Restaurant Management System with MongoDB Atlas",
+    "scripts": {
+        "install-backend": "cd backend && npm install",
+        "install-frontend": "cd frontend && npm install",
+        "install-all": "npm run install-backend && npm run install-frontend",
+        "start": "cd backend && npm start",
+        "dev": "cd backend && npm run dev",
+        "build": "cd backend && npm install"
+    },
+    "keywords": [
+        "restaurant",
+        "management",
+        "multi-tenant",
+        "mongodb",
+        "express",
+        "react"
+    ],
+    "author": "aqib11234",
+    "license": "MIT",
+    "engines": {
+        "node": ">=18.0.0",
+        "npm": ">=9.0.0"
+    }
+}
