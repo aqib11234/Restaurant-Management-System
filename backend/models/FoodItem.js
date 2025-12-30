@@ -7,12 +7,13 @@ const foodItemSchema = new mongoose.Schema({
   image: { type: String, default: '/api/placeholder/200/150' },
   description: { type: String, default: '', maxlength: 500 },
   available: { type: Boolean, default: true },
+  restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
   createdAt: { type: Date, default: Date.now }
 });
 
-// Indexes for performance
-foodItemSchema.index({ category: 1, available: 1 });
-foodItemSchema.index({ name: 1 });
-foodItemSchema.index({ available: 1, createdAt: -1 });
+// Indexes for performance - multi-tenant aware
+foodItemSchema.index({ restaurantId: 1, category: 1, available: 1 });
+foodItemSchema.index({ restaurantId: 1, name: 1 });
+foodItemSchema.index({ restaurantId: 1, available: 1, createdAt: -1 });
 
 module.exports = mongoose.model('FoodItem', foodItemSchema);

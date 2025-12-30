@@ -91,71 +91,99 @@ function SalesHistory() {
   };
 
   const exportToPDF = (selectedGroup = null) => {
-    const doc = new jsPDF();
-    const dataToExport = selectedGroup ? [selectedGroup] : salesData;
-    const fileName = selectedGroup
-      ? `sales-${selectedGroup.displayName.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`
-      : `sales-history-${groupBy}-${new Date().toISOString().split('T')[0]}.pdf`;
+    try {
+      const doc = new jsPDF();
+      const dataToExport = selectedGroup ? [selectedGroup] : salesData;
 
-    doc.setFontSize(20);
-    doc.text(selectedGroup ? `${selectedGroup.displayName} Sales Report` : 'Sales History Report', 20, 20);
-
-    doc.setFontSize(12);
-    doc.text(`Grouped by: ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}`, 20, 35);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 45);
-
-    let yPosition = 60;
-    doc.setFontSize(10);
-
-    if (!selectedGroup) {
-      // Summary for full report
-      doc.setFontSize(14);
-      doc.text('Summary:', 20, yPosition);
-      yPosition += 15;
-      doc.setFontSize(10);
-
-      const totalOrders = salesData.reduce((sum, group) => sum + group.totalOrders, 0);
-      const totalRevenue = salesData.reduce((sum, group) => sum + group.totalRevenue, 0);
-
-      doc.text(`Total Groups: ${salesData.length}`, 20, yPosition);
-      yPosition += 8;
-      doc.text(`Total Orders: ${totalOrders}`, 20, yPosition);
-      yPosition += 8;
-      doc.text(`Total Revenue: PKR ${Math.round(totalRevenue)}`, 20, yPosition);
-      yPosition += 8;
-      doc.text(`Average Revenue per Group: PKR ${Math.round(totalRevenue / salesData.length)}`, 20, yPosition);
-
-      yPosition += 20;
-    }
-
-    // Group details
-    dataToExport.forEach((group, index) => {
-      if (yPosition > 250) {
-        doc.addPage();
-        yPosition = 20;
+      // Safe filename generation
+      const timestamp = new Date().toISOString().split('T')[0];
+      let fileName;
+      if (selectedGroup && selectedGroup.displayName) {
+        const safeName = selectedGroup.displayName.toString().replace(/\s+/g, '-').toLowerCase();
+        fileName = `sales-${safeName}-${timestamp}.pdf`;
+      } else {
+        fileName = `sales-history-${groupBy}-${timestamp}.pdf`;
       }
 
-      doc.setFontSize(12);
-      doc.text(`${group.displayName}`, 20, yPosition);
-      yPosition += 10;
-      doc.setFontSize(10);
-      doc.text(`Orders: ${group.totalOrders} | Revenue: PKR ${Math.round(group.totalRevenue)}`, 30, yPosition);
-      yPosition += 10;
+      // Header
+      doc.setFontSize(20);
+      const title = selectedGroup && selectedGroup.displayName
+        ? `${selectedGroup.displayName} Sales Report`
+        : 'Sales History Report';
+      doc.text(title, 20, 20);
 
-      // Order details
-      group.orders.forEach(order => {
-        if (yPosition > 270) {
+      doc.setFontSize(12);
+      doc.text(`Grouped by: ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}`, 20, 35);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 45);
+
+      let yPosition = 60;
+      doc.setFontSize(10);
+
+      if (!selectedGroup && salesData.length > 0) {
+        // Summary
+        doc.setFontSize(14);
+        doc.text('Summary:', 20, yPosition);
+        yPosition += 15;
+        doc.setFontSize(10);
+
+        const totalOrders = salesData.reduce((sum, group) => sum + (group.totalOrders || 0), 0);
+        const totalRevenue = salesData.reduce((sum, group) => sum + (group.totalRevenue || 0), 0);
+
+        doc.text(`Total Groups: ${salesData.length}`, 20, yPosition);
+        yPosition += 8;
+        doc.text(`Total Orders: ${totalOrders}`, 20, yPosition);
+        yPosition += 8;
+        doc.text(`Total Revenue: PKR ${Math.round(totalRevenue)}`, 20, yPosition);
+        yPosition += 8;
+        doc.text(`Average Revenue: PKR ${Math.round(totalRevenue / salesData.length)}`, 20, yPosition);
+
+        yPosition += 20;
+      }
+
+      // Group details
+      dataToExport.forEach((group) => {
+        if (!group) return;
+
+        if (yPosition > 250) {
           doc.addPage();
           yPosition = 20;
         }
-        doc.text(`  ${formatDate(order.createdAt)} ${formatTime(order.createdAt)} - ${order.table === 0 ? 'Parcel' : `Table ${order.table}`} - PKR ${Math.round(order.total)}`, 40, yPosition);
-        yPosition += 6;
+
+        doc.setFontSize(12);
+        doc.text(group.displayName || 'Unknown Period', 20, yPosition);
+        yPosition += 10;
+        doc.setFontSize(10);
+        doc.text(`Orders: ${group.totalOrders || 0} | Revenue: PKR ${Math.round(group.totalRevenue || 0)}`, 30, yPosition);
+        yPosition += 10;
+
+        // Order details
+        if (group.orders && Array.isArray(group.orders)) {
+          group.orders.forEach(order => {
+            if (!order) return;
+
+            if (yPosition > 270) {
+              doc.addPage();
+              yPosition = 20;
+            }
+
+            const orderDate = order.createdAt ? formatDate(order.createdAt) : 'N/A';
+            const orderTime = order.createdAt ? formatTime(order.createdAt) : '';
+            const tableInfo = order.table === 0 ? 'Parcel' : `Table ${order.table || 'N/A'}`;
+            const total = Math.round(order.total || 0);
+
+            doc.text(`  ${orderDate} ${orderTime} - ${tableInfo} - PKR ${total}`, 40, yPosition);
+            yPosition += 6;
+          });
+        }
+
+        yPosition += 10;
       });
 
-      yPosition += 10;
-    });
-
-    doc.save(fileName);
+      doc.save(fileName);
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      alert('Error exporting PDF. Please try again.');
+    }
   };
 
   const exportToExcel = () => {

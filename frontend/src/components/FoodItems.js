@@ -56,6 +56,7 @@ function FoodItemModal({ item, onClose, onSave, error, isLoading }) {
             value={formData.category}
             onChange={(e) => setFormData({...formData, category: e.target.value})}
            >
+             <option value="🍳 Desi">🍳 Desi</option>
              <option value="🍳 777 Nashta">🍳 777 Nashta</option>
              <option value="🫓 777 Paratha">🫓 777 Paratha</option>
              <option value="🍖 777 Mutton Karahi">🍖 777 Mutton Karahi</option>

@@ -17,11 +17,12 @@ const salesHistorySchema = new mongoose.Schema({
       price: { type: Number, required: true }
     }]
   }],
+  restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Compound index to ensure unique entries for date and period
-salesHistorySchema.index({ date: 1, period: 1 }, { unique: true });
+// Compound index to ensure unique entries for date, period, and restaurant
+salesHistorySchema.index({ restaurantId: 1, date: 1, period: 1 }, { unique: true });
 
 module.exports = mongoose.model('SalesHistory', salesHistorySchema);

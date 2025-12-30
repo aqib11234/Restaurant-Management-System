@@ -14,10 +14,25 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/restaurant_management')
-.then(() => console.log('✅ MongoDB Connected Successfully'))
-.catch(err => console.error('❌ MongoDB Connection Error:', err));
+// MongoDB Connection with Atlas optimization
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/restaurant_management';
+
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+})
+  .then(() => {
+    console.log('✅ MongoDB Connected Successfully');
+    console.log(`📍 Database: ${mongoose.connection.name}`);
+    console.log(`🌐 Host: ${mongoose.connection.host}`);
+  })
+  .catch(err => {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    console.error('💡 Check your MONGODB_URI in .env file');
+    process.exit(1);
+  });
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -26,6 +41,8 @@ const foodItemRoutes = require('./routes/foodItems');
 const orderRoutes = require('./routes/orders');
 const salesRoutes = require('./routes/sales');
 const seedRoutes = require('./routes/seed');
+const adminRoutes = require('./routes/admin');
+const orderTrackingRoutes = require('./routes/orderTracking');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -34,10 +51,12 @@ app.use('/api/food-items', foodItemRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/seed', seedRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/order-tracking', orderTrackingRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'Restaurant Management System API is running!',
     timestamp: new Date().toISOString(),
     status: 'healthy'

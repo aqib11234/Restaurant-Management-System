@@ -3,11 +3,14 @@ const Order = require('../models/Order');
 const FoodItem = require('../models/FoodItem');
 const MonthlySales = require('../models/MonthlySales');
 const SalesHistory = require('../models/SalesHistory');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateAndEnforceLicense } = require('../middleware/auth');
 
-router.get('/stats', authenticateToken, async (req, res) => {
+router.get('/stats', authenticateAndEnforceLicense, async (req, res) => {
   try {
-    const totalFoodItems = await FoodItem.countDocuments({ available: true });
+    // Extract restaurantId from JWT (guaranteed to exist by middleware)
+    const restaurantId = req.user.restaurantId;
+
+    const totalFoodItems = await FoodItem.countDocuments({ restaurantId, available: true });
     const totalTables = 20; // Fixed number, could be dynamic
 
     // Get daily sales from SalesHistory (persistent, not affected by deletions)
@@ -15,6 +18,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
     const dailySalesDoc = await SalesHistory.findOne({
+      restaurantId,
       date: today,
       period: 'daily'
     });
@@ -26,6 +30,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Get all monthly sales that are not the current month
     const previousMonths = await MonthlySales.find({
+      restaurantId,
       $or: [
         { year: { $lt: currentYear } },
         { year: currentYear, month: { $lt: currentMonth } }
@@ -36,8 +41,9 @@ router.get('/stats', authenticateToken, async (req, res) => {
     for (const month of previousMonths) {
       const monthDate = new Date(month.year, month.month - 1, 1);
       await SalesHistory.findOneAndUpdate(
-        { date: monthDate, period: 'monthly' },
+        { restaurantId, date: monthDate, period: 'monthly' },
         {
+          restaurantId,
           orders: month.totalOrders,
           revenue: month.totalSales,
           updatedAt: new Date()
@@ -49,21 +55,21 @@ router.get('/stats', authenticateToken, async (req, res) => {
     }
 
     // Get current monthly sales from MonthlySales collection
-    const monthlySalesDoc = await MonthlySales.findOne({ year: currentYear, month: currentMonth });
+    const monthlySalesDoc = await MonthlySales.findOne({ restaurantId, year: currentYear, month: currentMonth });
     const monthlySales = monthlySalesDoc ? monthlySalesDoc.totalSales : 0;
 
     // Order status counts - use historical counts (not affected by deletions)
     // For completed orders, use MonthlySales totalOrders (persistent)
-    const allMonthlySales = await MonthlySales.find({});
+    const allMonthlySales = await MonthlySales.find({ restaurantId });
     const completedOrders = allMonthlySales.reduce((sum, month) => sum + month.totalOrders, 0);
 
     // For pending orders, count current pending orders (but this will decrease on deletion)
     // To make it persistent, we'd need a separate counter - for now, count current
-    const pendingOrders = await Order.countDocuments({ status: { $ne: 'completed' } });
+    const pendingOrders = await Order.countDocuments({ restaurantId, status: { $ne: 'completed' } });
 
     // Top selling dishes
     const topDishes = await Order.aggregate([
-      { $match: { status: 'completed' } },
+      { $match: { restaurantId, status: 'completed' } },
       { $unwind: '$items' },
       { $group: { _id: '$items.name', sales: { $sum: '$items.quantity' } } },
       { $sort: { sales: -1 } },

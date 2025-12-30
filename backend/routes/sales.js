@@ -1,18 +1,19 @@
 const router = require('express').Router();
 const Order = require('../models/Order');
 const SalesHistory = require('../models/SalesHistory');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateAndEnforceLicense } = require('../middleware/auth');
 
 // Original sales endpoint for backward compatibility
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateAndEnforceLicense, async (req, res) => {
   try {
+    const restaurantId = req.user.restaurantId;
     const { period = 'daily', startDate, endDate } = req.query;
 
     let salesData;
 
     if (period === 'daily') {
       // For daily, return from SalesHistory (data is stored incrementally)
-      let query = { period: 'daily' };
+      let query = { restaurantId, period: 'daily' };
 
       if (startDate && endDate) {
         query.date = {
@@ -59,7 +60,7 @@ router.get('/', authenticateToken, async (req, res) => {
       ]);
     } else if (period === 'monthly') {
       // For monthly, return from SalesHistory
-      let query = { period: 'monthly' };
+      let query = { restaurantId, period: 'monthly' };
 
       if (startDate && endDate) {
         query.date = {
@@ -83,8 +84,9 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // New detailed sales history endpoint - uses stored historical data
-router.get('/history', authenticateToken, async (req, res) => {
+router.get('/history', authenticateAndEnforceLicense, async (req, res) => {
   try {
+    const restaurantId = req.user.restaurantId;
     const { groupBy = 'daily', startDate, endDate } = req.query;
 
     let dateFilter = {};
@@ -103,11 +105,12 @@ router.get('/history', authenticateToken, async (req, res) => {
     if (groupBy === 'daily') {
       // Get daily sales history with stored order details
       salesData = await SalesHistory.find({
+        restaurantId,
         period: 'daily',
         ...dateFilter
       })
-      .sort({ date: -1 })
-      .lean();
+        .sort({ date: -1 })
+        .lean();
 
       // Transform to match expected format
       salesData = salesData.map(day => ({
@@ -121,6 +124,7 @@ router.get('/history', authenticateToken, async (req, res) => {
     } else if (groupBy === 'weekly') {
       // Aggregate daily data into weekly
       const dailyData = await SalesHistory.find({
+        restaurantId,
         period: 'daily',
         ...dateFilter
       }).sort({ date: 1 }).lean();
@@ -159,11 +163,12 @@ router.get('/history', authenticateToken, async (req, res) => {
     } else if (groupBy === 'monthly') {
       // Get monthly sales history with stored order details
       salesData = await SalesHistory.find({
+        restaurantId,
         period: 'monthly',
         ...dateFilter
       })
-      .sort({ date: -1 })
-      .lean();
+        .sort({ date: -1 })
+        .lean();
 
       // Transform to match expected format
       salesData = salesData.map(month => ({
@@ -184,8 +189,9 @@ router.get('/history', authenticateToken, async (req, res) => {
 });
 
 // Get orders for a specific period
-router.get('/orders/:period/:date', authenticateToken, async (req, res) => {
+router.get('/orders/:period/:date', authenticateAndEnforceLicense, async (req, res) => {
   try {
+    const restaurantId = req.user.restaurantId;
     const { period, date } = req.params;
     const { page = 1, limit = 50 } = req.query;
 
@@ -221,18 +227,20 @@ router.get('/orders/:period/:date', authenticateToken, async (req, res) => {
     }
 
     const orders = await Order.find({
+      restaurantId,
       status: 'completed',
       createdAt: {
         $gte: startDate,
         $lt: endDate
       }
     })
-    .sort({ createdAt: -1 })
-    .limit(limit * 1)
-    .skip((page - 1) * limit)
-    .select('_id table total createdAt items');
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .select('_id table total createdAt items');
 
     const total = await Order.countDocuments({
+      restaurantId,
       status: 'completed',
       createdAt: {
         $gte: startDate,

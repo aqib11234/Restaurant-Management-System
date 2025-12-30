@@ -1,11 +1,17 @@
 const router = require('express').Router();
 const FoodItem = require('../models/FoodItem');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authenticateAndEnforceLicense } = require('../middleware/auth');
 
+// Public route - no auth required for viewing food items
 router.get('/', async (req, res) => {
   try {
-    const { search, category, page = 1, limit = 100 } = req.query;
+    const { search, category, page = 1, limit = 100, restaurantId } = req.query;
     const query = { available: true };
+
+    // If restaurantId is provided, filter by it
+    if (restaurantId) {
+      query.restaurantId = restaurantId;
+    }
 
     if (search) {
       query.name = { $regex: search, $options: 'i' };
@@ -33,11 +39,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateAndEnforceLicense, async (req, res) => {
   try {
+    const restaurantId = req.user.restaurantId;
     const { name, price, category, image, description } = req.body;
 
     const foodItem = new FoodItem({
+      restaurantId,
       name,
       price: parseFloat(price),
       category,
@@ -53,13 +61,14 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateAndEnforceLicense, async (req, res) => {
   try {
+    const restaurantId = req.user.restaurantId;
     const { id } = req.params;
     const { name, price, category, image, description } = req.body;
 
-    const foodItem = await FoodItem.findByIdAndUpdate(
-      id,
+    const foodItem = await FoodItem.findOneAndUpdate(
+      { _id: id, restaurantId },
       {
         name,
         price: parseFloat(price),
@@ -81,12 +90,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateAndEnforceLicense, async (req, res) => {
   try {
+    const restaurantId = req.user.restaurantId;
     const { id } = req.params;
 
-    const foodItem = await FoodItem.findByIdAndUpdate(
-      id,
+    const foodItem = await FoodItem.findOneAndUpdate(
+      { _id: id, restaurantId },
       { available: false },
       { new: true }
     );
