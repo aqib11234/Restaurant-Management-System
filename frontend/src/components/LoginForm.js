@@ -3,7 +3,7 @@ import { UtensilsCrossed } from 'lucide-react';
 import api from '../services/api';
 
 function LoginForm({ onLogin, onSignupClick }) {
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [credentials, setCredentials] = useState({ email: '', password: '' });
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -12,7 +12,7 @@ function LoginForm({ onLogin, onSignupClick }) {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    
+
     try {
       const response = await api.login(credentials);
       if (response.token) {
@@ -46,14 +46,14 @@ function LoginForm({ onLogin, onSignupClick }) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-gray-300 text-sm font-medium mb-2">
-              Username
+              Email
             </label>
             <input
-              type="text"
+              type="email"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
-              value={credentials.username}
-              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-              placeholder="Enter username"
+              value={credentials.email}
+              onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
+              placeholder="Enter your email"
               required
             />
           </div>
@@ -65,7 +65,7 @@ function LoginForm({ onLogin, onSignupClick }) {
               type="password"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
               value={credentials.password}
-              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+              onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
               placeholder="Enter password"
               required
             />
@@ -73,9 +73,8 @@ function LoginForm({ onLogin, onSignupClick }) {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full ${
-              isLoading ? 'bg-green-700' : 'bg-green-500 hover:bg-green-600'
-            } text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center`}
+            className={`w-full ${isLoading ? 'bg-green-700' : 'bg-green-500 hover:bg-green-600'
+              } text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center`}
           >
             {isLoading ? (
               <>
@@ -104,7 +103,7 @@ function LoginForm({ onLogin, onSignupClick }) {
         <div className="mt-6 p-4 bg-gray-700 rounded-lg">
           <p className="text-gray-300 text-sm text-center">
             Demo Credentials:<br />
-            <span className="text-green-400 font-medium">Username: admin</span><br />
+            <span className="text-green-400 font-medium">Email: admin@777restaurant.com</span><br />
             <span className="text-green-400 font-medium">Password: admin123</span>
           </p>
         </div>
