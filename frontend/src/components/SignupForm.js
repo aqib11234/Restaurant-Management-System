@@ -4,7 +4,7 @@ import api from '../services/api';
 
 function SignupForm({ onSignup }) {
   const [formData, setFormData] = useState({
-    username: '',
+    restaurantName: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -31,10 +31,10 @@ function SignupForm({ onSignup }) {
 
     setError('');
     setIsLoading(true);
-    
+
     try {
       const response = await api.signup({
-        username: formData.username,
+        restaurantName: formData.restaurantName,
         email: formData.email,
         password: formData.password
       });
@@ -70,14 +70,14 @@ function SignupForm({ onSignup }) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-gray-300 text-sm font-medium mb-2">
-              Username
+              Restaurant Name
             </label>
             <input
               type="text"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
-              value={formData.username}
-              onChange={(e) => setFormData({...formData, username: e.target.value})}
-              placeholder="Choose a username"
+              value={formData.restaurantName}
+              onChange={(e) => setFormData({ ...formData, restaurantName: e.target.value })}
+              placeholder="Enter your restaurant name"
               required
             />
           </div>
@@ -90,7 +90,7 @@ function SignupForm({ onSignup }) {
               type="email"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
               value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="Enter your email"
               required
             />
@@ -104,7 +104,7 @@ function SignupForm({ onSignup }) {
               type="password"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
               value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               placeholder="Create a password"
               required
             />
@@ -118,7 +118,7 @@ function SignupForm({ onSignup }) {
               type="password"
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-green-500 focus:outline-none"
               value={formData.confirmPassword}
-              onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               placeholder="Confirm your password"
               required
             />
@@ -127,9 +127,8 @@ function SignupForm({ onSignup }) {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full ${
-              isLoading ? 'bg-green-700' : 'bg-green-500 hover:bg-green-600'
-            } text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center`}
+            className={`w-full ${isLoading ? 'bg-green-700' : 'bg-green-500 hover:bg-green-600'
+              } text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center`}
           >
             {isLoading ? (
               <>
