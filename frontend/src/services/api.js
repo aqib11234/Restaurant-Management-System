@@ -1,6 +1,7 @@
 import { handleResponse, getAuthHeaders } from '../utils/auth';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// Use environment variable for API URL, fallback to localhost for development
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
 // Helper function to handle API responses
 const handleApiResponse = async (response) => {

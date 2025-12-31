@@ -167,20 +167,56 @@ curl $RENDER_URL/api/food-items \
 
 ---
 
-## 🌐 Frontend Deployment (Optional)
+## 🌐 Frontend Deployment
 
-To deploy the frontend on Render:
+### Current Deployment
+- **Service Name:** Restaurant-Management-System-f
+- **Type:** Static Site (Create React App)
+- **Backend Service:** Restaurant-Management-System-2
+
+### ⚠️ Important: Fix Localhost Issue
+
+The frontend needs to be configured to use the production backend URL instead of localhost.
+
+#### Step 1: Verify Environment Variable in Render
+
+1. Go to Render Dashboard
+2. Select **Restaurant-Management-System-f** (frontend static site)
+3. Go to **Environment** tab
+4. Add/Update this environment variable:
+   ```
+   Key: REACT_APP_API_BASE_URL
+   Value: https://restaurant-management-system-2-sy9q.onrender.com/api
+   ```
+   ⚠️ **Note:** The variable name is `REACT_APP_API_BASE_URL` (not `REACT_APP_API_URL`)
+
+#### Step 2: Trigger Rebuild
+
+After updating the environment variable:
+1. Go to **Manual Deploy** section
+2. Click **Deploy latest commit** or **Clear build cache & deploy**
+3. Wait for the build to complete (~2-5 minutes)
+
+#### Step 3: Verify Fix
+
+1. Open your deployed frontend URL
+2. Open browser DevTools (F12) → Network tab
+3. Try to login/signup
+4. Verify API calls go to `https://restaurant-management-system-2-sy9q.onrender.com/api/...`
+5. Should NOT see calls to `localhost:5000`
+
+### Initial Frontend Deployment (If Not Yet Deployed)
 
 1. **Create Static Site:**
    - New + → Static Site
-   - Connect repository
+   - Connect repository: `aqib11234/Restaurant-Management-System`
    - Root Directory: `frontend`
    - Build Command: `npm install && npm run build`
    - Publish Directory: `build`
 
 2. **Environment Variables:**
    ```
-   REACT_APP_API_URL=https://your-backend-url.onrender.com
+   REACT_APP_API_BASE_URL=https://restaurant-management-system-2-sy9q.onrender.com/api
    ```
 
 ---
