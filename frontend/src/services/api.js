@@ -3,6 +3,18 @@ import { handleResponse, getAuthHeaders } from '../utils/auth';
 // Use environment variable for API URL, fallback to localhost for development
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
+// Debug: Log the API URL being used (only in development)
+if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 API_BASE_URL:', API_BASE_URL);
+    console.log('🔧 REACT_APP_API_BASE_URL env var:', process.env.REACT_APP_API_BASE_URL);
+}
+
+// Validate API URL format
+if (!API_BASE_URL.includes('/api')) {
+    console.error('⚠️ WARNING: API_BASE_URL does not include "/api" path. Current value:', API_BASE_URL);
+    console.error('⚠️ Expected format: https://your-backend-url.onrender.com/api');
+}
+
 // Helper function to handle API responses
 const handleApiResponse = async (response) => {
     if (!response.ok) {
