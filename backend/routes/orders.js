@@ -140,10 +140,10 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
 
       // Update monthly sales
       await MonthlySales.findOneAndUpdate(
-        { year, month },
+        { restaurantId: order.restaurantId, year, month },
         {
           $inc: { totalSales: order.total, totalOrders: 1 },
-          $set: { updatedAt: new Date() }
+          $set: { restaurantId: order.restaurantId, updatedAt: new Date() }
         },
         { upsert: true, new: true }
       );
@@ -164,11 +164,11 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
 
       // Update daily sales history
       await SalesHistory.findOneAndUpdate(
-        { date: dayDate, period: 'daily' },
+        { restaurantId: order.restaurantId, date: dayDate, period: 'daily' },
         {
           $inc: { orders: 1, revenue: order.total },
           $push: { orderDetails: orderDetails },
-          $set: { updatedAt: new Date() }
+          $set: { restaurantId: order.restaurantId, updatedAt: new Date() }
         },
         { upsert: true, new: true }
       );
@@ -176,11 +176,11 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
       // Update monthly sales history
       const monthDate = new Date(Date.UTC(orderDate.getUTCFullYear(), orderDate.getUTCMonth(), 1));
       await SalesHistory.findOneAndUpdate(
-        { date: monthDate, period: 'monthly' },
+        { restaurantId: order.restaurantId, date: monthDate, period: 'monthly' },
         {
           $inc: { orders: 1, revenue: order.total },
           $push: { orderDetails: orderDetails },
-          $set: { updatedAt: new Date() }
+          $set: { restaurantId: order.restaurantId, updatedAt: new Date() }
         },
         { upsert: true, new: true }
       );
@@ -193,7 +193,7 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
 
       // Remove from monthly sales
       await MonthlySales.findOneAndUpdate(
-        { year, month },
+        { restaurantId: order.restaurantId, year, month },
         {
           $inc: { totalSales: -order.total, totalOrders: -1 },
           $set: { updatedAt: new Date() }
@@ -202,7 +202,7 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
 
       // Remove from daily sales history
       await SalesHistory.findOneAndUpdate(
-        { date: dayDate, period: 'daily' },
+        { restaurantId: order.restaurantId, date: dayDate, period: 'daily' },
         {
           $inc: { orders: -1, revenue: -order.total },
           $pull: { orderDetails: { orderId: order._id } },
@@ -213,7 +213,7 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
       // Remove from monthly sales history
       const monthDate = new Date(Date.UTC(orderDate.getUTCFullYear(), orderDate.getUTCMonth(), 1));
       await SalesHistory.findOneAndUpdate(
-        { date: monthDate, period: 'monthly' },
+        { restaurantId: order.restaurantId, date: monthDate, period: 'monthly' },
         {
           $inc: { orders: -1, revenue: -order.total },
           $pull: { orderDetails: { orderId: order._id } },
