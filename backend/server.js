@@ -43,6 +43,7 @@ const salesRoutes = require('./routes/sales');
 const seedRoutes = require('./routes/seed');
 const adminRoutes = require('./routes/admin');
 const orderTrackingRoutes = require('./routes/orderTracking');
+const migrateRoutes = require('./routes/migrate');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -53,6 +54,7 @@ app.use('/api/sales', salesRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/order-tracking', orderTrackingRoutes);
+app.use('/api/migrate', migrateRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

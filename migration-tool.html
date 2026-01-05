@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Migration Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .info-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .info-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info-box p {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.loading {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .result h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .result pre {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .stat-card h4 {
+            color: #667eea;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Database Migration Tool</h1>
+        <p class="subtitle">Fix Missing RestaurantId in Sales Data</p>
+
+        <div class="info-box">
+            <h3>📋 What This Does</h3>
+            <p>This tool fixes the sales data in your database by adding the missing <code>restaurantId</code> field. This will restore your dashboard statistics and sales history.</p>
+        </div>
+
+        <div class="input-group">
+            <label for="apiUrl">Backend API URL</label>
+            <input 
+                type="text" 
+                id="apiUrl" 
+                placeholder="https://restaurant-management-system-2-sy9q.onrender.com/api"
+                value="https://restaurant-management-system-2-sy9q.onrender.com/api"
+            >
+        </div>
+
+        <div class="input-group">
+            <label for="token">Your Login Token</label>
+            <input 
+                type="password" 
+                id="token" 
+                placeholder="Paste your token here (from localStorage)"
+            >
+            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                Open your restaurant website → Press F12 → Console → Type: <code>localStorage.getItem('token')</code>
+            </small>
+        </div>
+
+        <div class="button-group">
+            <button class="btn-secondary" onclick="checkStatus()">Check Status</button>
+            <button class="btn-primary" onclick="runMigration()">Run Migration</button>
+        </div>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function getApiUrl() {
+            return document.getElementById('apiUrl').value.trim();
+        }
+
+        function getToken() {
+            return document.getElementById('token').value.trim();
+        }
+
+        function showResult(type, title, message, data = null) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+            
+            let html = `<h3>${title}</h3><p>${message}</p>`;
+            
+            if (data) {
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+
+        async function checkStatus() {
+            const apiUrl = getApiUrl();
+            const token = getToken();
+
+            if (!token) {
+                showResult('error', '❌ Error', 'Please enter your login token');
+                return;
+            }
+
+            showResult('loading', '⏳ Checking...', 'Please wait while we check the migration status...');
+
+            try {
+                const response = await fetch(`${apiUrl}/migrate/status`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    const needsMigration = data.needsMigration;
+                    const title = needsMigration ? '⚠️ Migration Needed' : '✅ All Good!';
+                    const message = needsMigration 
+                        ? 'Your database needs migration. Click "Run Migration" to fix it.'
+                        : 'Your database is already up to date!';
+                    
+                    showResult(needsMigration ? 'error' : 'success', title, message, data);
+                } else {
+                    showResult('error', '❌ Error', data.message || 'Failed to check status', data);
+                }
+            } catch (error) {
+                showResult('error', '❌ Network Error', error.message);
+            }
+        }
+
+        async function runMigration() {
+            const apiUrl = getApiUrl();
+            const token = getToken();
+
+            if (!token) {
+                showResult('error', '❌ Error', 'Please enter your login token');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to run the migration? This will update your database.')) {
+                return;
+            }
+
+            showResult('loading', '⏳ Running Migration...', 'Please wait, this may take a minute...');
+
+            try {
+                const response = await fetch(`${apiUrl}/migrate/fix-restaurant-id`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    let message = `Migration completed successfully!<br><br>`;
+                    message += `<div class="stats">`;
+                    message += `<div class="stat-card"><h4>Monthly Sales Updated</h4><p>${data.results.monthlySales.updated}</p></div>`;
+                    message += `<div class="stat-card"><h4>Sales History Updated</h4><p>${data.results.salesHistory.updated}</p></div>`;
+                    message += `<div class="stat-card"><h4>Total Monthly Sales</h4><p>${data.results.monthlySales.total}</p></div>`;
+                    message += `<div class="stat-card"><h4>Total Sales History</h4><p>${data.results.salesHistory.total}</p></div>`;
+                    message += `</div>`;
+                    
+                    showResult('success', '✅ Success!', message, data.results.sampleData);
+                    
+                    setTimeout(() => {
+                        alert('Migration complete! Please refresh your dashboard to see the updated data.');
+                    }, 1000);
+                } else {
+                    showResult('error', '❌ Migration Failed', data.message || 'An error occurred', data);
+                }
+            } catch (error) {
+                showResult('error', '❌ Network Error', error.message);
+            }
+        }
+
+        // Auto-fill token if available
+        window.addEventListener('load', () => {
+            const savedToken = localStorage.getItem('token');
+            if (savedToken) {
+                document.getElementById('token').value = savedToken;
+            }
+        });
+    </script>
+</body>
+</html>
