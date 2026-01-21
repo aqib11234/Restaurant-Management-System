@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Subscription Expiry</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .error-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .error-box h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .error-box p {
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .error-box code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #f5576c;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.loading {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .result h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .result pre {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .info-list {
+            margin-top: 15px;
+            padding-left: 20px;
+        }
+
+        .info-list li {
+            margin-bottom: 8px;
+            color: #155724;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔓 Fix Subscription Expiry</h1>
+        <p class="subtitle">Restore access to your restaurant system</p>
+
+        <div class="error-box">
+            <h3>⚠️ Subscription Expired</h3>
+            <p>Your subscription has expired and you can't login. This tool will convert your account to a
+                <strong>lifetime license</strong> (no expiry) so you can access your system again.</p>
+        </div>
+
+        <div class="input-group">
+            <label for="apiUrl">Backend API URL</label>
+            <input type="text" id="apiUrl" placeholder="https://restaurant-management-system-2-sy9q.onrender.com/api"
+                value="https://restaurant-management-system-2-sy9q.onrender.com/api">
+        </div>
+
+        <div class="input-group">
+            <label for="restaurantName">Your Restaurant Name</label>
+            <input type="text" id="restaurantName" placeholder="Enter your restaurant name exactly as registered">
+            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                This must match the name you used when signing up
+            </small>
+        </div>
+
+        <button onclick="fixSubscription()">Fix Subscription & Enable Lifetime Access</button>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function showResult(type, title, message, data = null) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+
+            let html = `<h3>${title}</h3><p>${message}</p>`;
+
+            if (data) {
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+
+            resultDiv.innerHTML = html;
+        }
+
+        async function fixSubscription() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const restaurantName = document.getElementById('restaurantName').value.trim();
+
+            if (!restaurantName) {
+                showResult('error', '❌ Error', 'Please enter your restaurant name');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to convert "${restaurantName}" to a lifetime license?`)) {
+                return;
+            }
+
+            showResult('loading', '⏳ Processing...', 'Please wait while we update your subscription...');
+
+            try {
+                const response = await fetch(`${apiUrl}/migrate/fix-subscription`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ restaurantName })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    let message = `<strong>Success!</strong> Your subscription has been fixed.<br><br>`;
+                    message += `<ul class="info-list">`;
+                    message += `<li><strong>Restaurant:</strong> ${data.restaurant.name}</li>`;
+                    message += `<li><strong>Old License:</strong> ${data.restaurant.oldLicenseType}</li>`;
+                    message += `<li><strong>New License:</strong> ${data.restaurant.newLicenseType} (No Expiry!)</li>`;
+                    message += `<li><strong>Status:</strong> ${data.restaurant.hasValidLicense ? '✅ Active' : '❌ Inactive'}</li>`;
+                    message += `</ul>`;
+                    message += `<br><strong>You can now login to your restaurant system!</strong>`;
+
+                    showResult('success', '✅ Subscription Fixed!', message);
+
+                    setTimeout(() => {
+                        if (confirm('Would you like to open the login page now?')) {
+                            window.open('https://restaurant-management-system-f.onrender.com', '_blank');
+                        }
+                    }, 2000);
+                } else {
+                    showResult('error', '❌ Failed', data.message || 'An error occurred', data);
+                }
+            } catch (error) {
+                showResult('error', '❌ Network Error', `Failed to connect to the server: ${error.message}`);
+            }
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('restaurantName').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                fixSubscription();
+            }
+        });
+    </script>
+</body>
+
+</html>

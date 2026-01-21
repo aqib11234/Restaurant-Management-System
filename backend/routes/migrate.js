@@ -162,4 +162,74 @@ router.get('/status', authenticateAndEnforceLicense, async (req, res) => {
     }
 });
 
+/**
+ * Fix Subscription Expiry
+ * Converts restaurant to lifetime license
+ * 
+ * SECURITY: This endpoint bypasses authentication because users can't login
+ * with an expired subscription. It requires the restaurant name as verification.
+ * 
+ * Usage: POST /api/migrate/fix-subscription
+ * Body: { "restaurantName": "Your Restaurant Name" }
+ */
+router.post('/fix-subscription', async (req, res) => {
+    try {
+        const { restaurantName } = req.body;
+
+        if (!restaurantName) {
+            return res.status(400).json({
+                success: false,
+                message: 'Restaurant name is required'
+            });
+        }
+
+        // Find restaurant by name
+        const restaurant = await Restaurant.findOne({ name: restaurantName });
+
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Restaurant not found. Please check the name and try again.'
+            });
+        }
+
+        console.log(`🔧 Fixing subscription for: ${restaurant.name}`);
+
+        // Store old values for response
+        const oldLicenseType = restaurant.licenseType;
+        const oldSubscriptionEnds = restaurant.subscriptionEndsAt;
+
+        // Update to lifetime license
+        restaurant.licenseType = 'lifetime';
+        restaurant.plan = null;
+        restaurant.subscriptionEndsAt = null;
+        restaurant.isActive = true;
+        await restaurant.save();
+
+        console.log(`✅ Updated ${restaurant.name} to lifetime license`);
+
+        res.json({
+            success: true,
+            message: 'Subscription fixed successfully! You can now login.',
+            restaurant: {
+                name: restaurant.name,
+                oldLicenseType,
+                oldSubscriptionEnds,
+                newLicenseType: restaurant.licenseType,
+                newSubscriptionEnds: restaurant.subscriptionEndsAt || 'Never (Lifetime)',
+                isActive: restaurant.isActive,
+                hasValidLicense: restaurant.hasValidLicense()
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Fix subscription failed:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fix subscription',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
