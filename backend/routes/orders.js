@@ -118,7 +118,8 @@ router.put('/:id/status', authenticateAndEnforceLicense, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const order = await Order.findById(id);
+    const restaurantId = req.user.restaurantId;
+    const order = await Order.findOne({ _id: id, restaurantId });
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -264,7 +265,8 @@ router.put('/:id/remove-item-quantity', authenticateAndEnforceLicense, async (re
     const { id } = req.params;
     const { itemIndex } = req.body; // single index to decrease quantity
 
-    const order = await Order.findById(id);
+    const restaurantId = req.user.restaurantId;
+    const order = await Order.findOne({ _id: id, restaurantId });
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -309,7 +311,8 @@ router.delete('/:id', authenticateAndEnforceLicense, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await Order.findByIdAndDelete(id);
+    const restaurantId = req.user.restaurantId;
+    const order = await Order.findOneAndDelete({ _id: id, restaurantId });
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });

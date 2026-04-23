@@ -2,6 +2,8 @@ import React, { useState, useEffect, useContext } from 'react';
 import { UtensilsCrossed, DollarSign, Users, TrendingUp, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import { OrderUpdateContext } from '../App';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 function Dashboard() {
   const { orderUpdateTrigger } = useContext(OrderUpdateContext);
@@ -17,9 +19,12 @@ function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+
   useEffect(() => {
     fetchDashboardData();
-  }, [orderUpdateTrigger]);
+  }, [orderUpdateTrigger, startDate, endDate]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -49,7 +54,13 @@ function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getDashboardStats(localStorage.getItem('token'));
+      const params = {};
+      if (startDate && endDate) {
+        // Need to pass as ISO strings or formatted dates that the backend can parse
+        params.startDate = startDate.toISOString();
+        params.endDate = endDate.toISOString();
+      }
+      const response = await api.getDashboardStats(params);
       
       if (response.error) {
         throw new Error(response.error);
@@ -89,8 +100,39 @@ function Dashboard() {
 
       {/* Content */}
       <div className="relative z-10">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+        
+        <div className="flex items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-700">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm font-medium">From:</span>
+            <DatePicker
+              selected={startDate}
+              onChange={(date) => setStartDate(date)}
+              selectsStart
+              startDate={startDate}
+              endDate={endDate}
+              placeholderText="Select date"
+              className="custom-date-input"
+              dateFormat="MMM d, yyyy"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm font-medium">To:</span>
+            <DatePicker
+              selected={endDate}
+              onChange={(date) => setEndDate(date)}
+              selectsEnd
+              startDate={startDate}
+              endDate={endDate}
+              minDate={startDate}
+              placeholderText="Select date"
+              className="custom-date-input"
+              dateFormat="MMM d, yyyy"
+            />
+          </div>
+        </div>
+
         {isLoading && (
           <div className="flex items-center text-gray-400">
             <Loader2 className="animate-spin mr-2" size={20} />

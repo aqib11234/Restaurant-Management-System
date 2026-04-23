@@ -4,6 +4,8 @@ import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { OrderUpdateContext } from '../App';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 function SalesHistory() {
   const { orderUpdateTrigger } = useContext(OrderUpdateContext);
@@ -14,14 +16,22 @@ function SalesHistory() {
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [loadingOrders, setLoadingOrders] = useState(new Set());
 
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+
   useEffect(() => {
     fetchSalesHistory();
-  }, [groupBy, orderUpdateTrigger]);
+  }, [groupBy, orderUpdateTrigger, startDate, endDate]);
 
   const fetchSalesHistory = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getSalesHistory({ groupBy });
+      const params = { groupBy };
+      if (startDate && endDate) {
+        params.startDate = startDate.toISOString();
+        params.endDate = endDate.toISOString();
+      }
+      const response = await api.getSalesHistory(params);
       setSalesData(response || []);
       setError('');
     } catch (err) {
@@ -49,8 +59,10 @@ function SalesHistory() {
           } : g
         )
       );
+      return response.orders; // Return for export function
     } catch (err) {
       console.error('Error fetching group orders:', err);
+      return [];
     } finally {
       setLoadingOrders(prev => {
         const newSet = new Set(prev);
@@ -68,7 +80,7 @@ function SalesHistory() {
       newExpanded.add(groupId);
       // Fetch orders for this group if not already loaded
       const group = salesData.find(g => `${g.period}-${g.displayName}` === groupId);
-      if (group && group.orders.length === 0) {
+      if (group && (!group.orders || group.orders.length === 0)) {
         fetchGroupOrders(group);
       }
     }
@@ -90,10 +102,19 @@ function SalesHistory() {
     });
   };
 
-  const exportToPDF = (selectedGroup = null) => {
+  const exportToPDF = async (selectedGroup = null) => {
     try {
+      setIsLoading(true);
       const doc = new jsPDF();
-      const dataToExport = selectedGroup ? [selectedGroup] : salesData;
+      let dataToExport = selectedGroup ? [selectedGroup] : [...salesData];
+
+      // Ensure orders are loaded for all groups being exported
+      for (let i = 0; i < dataToExport.length; i++) {
+        if (!dataToExport[i].orders || dataToExport[i].orders.length === 0) {
+          const fetchedOrders = await fetchGroupOrders(dataToExport[i]);
+          dataToExport[i] = { ...dataToExport[i], orders: fetchedOrders };
+        }
+      }
 
       // Safe filename generation
       const timestamp = new Date().toISOString().split('T')[0];
@@ -119,23 +140,23 @@ function SalesHistory() {
       let yPosition = 60;
       doc.setFontSize(10);
 
-      if (!selectedGroup && salesData.length > 0) {
+      if (!selectedGroup && dataToExport.length > 0) {
         // Summary
         doc.setFontSize(14);
         doc.text('Summary:', 20, yPosition);
         yPosition += 15;
         doc.setFontSize(10);
 
-        const totalOrders = salesData.reduce((sum, group) => sum + (group.totalOrders || 0), 0);
-        const totalRevenue = salesData.reduce((sum, group) => sum + (group.totalRevenue || 0), 0);
+        const totalOrders = dataToExport.reduce((sum, group) => sum + (group.totalOrders || 0), 0);
+        const totalRevenue = dataToExport.reduce((sum, group) => sum + (group.totalRevenue || 0), 0);
 
-        doc.text(`Total Groups: ${salesData.length}`, 20, yPosition);
+        doc.text(`Total Groups: ${dataToExport.length}`, 20, yPosition);
         yPosition += 8;
         doc.text(`Total Orders: ${totalOrders}`, 20, yPosition);
         yPosition += 8;
         doc.text(`Total Revenue: PKR ${Math.round(totalRevenue)}`, 20, yPosition);
         yPosition += 8;
-        doc.text(`Average Revenue: PKR ${Math.round(totalRevenue / salesData.length)}`, 20, yPosition);
+        doc.text(`Average Revenue: PKR ${Math.round(totalRevenue / dataToExport.length)}`, 20, yPosition);
 
         yPosition += 20;
       }
@@ -183,42 +204,61 @@ function SalesHistory() {
     } catch (error) {
       console.error('PDF Export Error:', error);
       alert('Error exporting PDF. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const exportToExcel = () => {
-    const workbook = XLSX.utils.book_new();
+  const exportToExcel = async () => {
+    try {
+      setIsLoading(true);
+      const workbook = XLSX.utils.book_new();
 
-    // Summary sheet
-    const summaryData = salesData.map(group => ({
-      Period: group.displayName,
-      Orders: group.totalOrders,
-      Revenue: Math.round(group.totalRevenue),
-      'Avg Order': Math.round(group.totalRevenue / group.totalOrders)
-    }));
+      // Summary sheet
+      const summaryData = salesData.map(group => ({
+        Period: group.displayName,
+        Orders: group.totalOrders,
+        Revenue: Math.round(group.totalRevenue),
+        'Avg Order': group.totalOrders > 0 ? Math.round(group.totalRevenue / group.totalOrders) : 0
+      }));
 
-    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+      const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
 
-    // Detailed orders sheet
-    const allOrders = [];
-    salesData.forEach(group => {
-      group.orders.forEach(order => {
-        allOrders.push({
-          Period: group.displayName,
-          'Order Time': formatDate(order.createdAt) + ' ' + formatTime(order.createdAt),
-          'Table No': order.table === 0 ? 'Parcel' : order.table,
-          'Order ID': order._id.toString().slice(-6),
-          'Total Price': Math.round(order.total),
-          Status: order.status
-        });
-      });
-    });
+      // Detailed orders sheet
+      const allOrders = [];
+      
+      // Ensure orders are loaded for all groups
+      for (const group of salesData) {
+        let groupOrders = group.orders;
+        if (!groupOrders || groupOrders.length === 0) {
+          groupOrders = await fetchGroupOrders(group);
+        }
+        
+        if (groupOrders && Array.isArray(groupOrders)) {
+          groupOrders.forEach(order => {
+            allOrders.push({
+              Period: group.displayName,
+              'Order Time': formatDate(order.createdAt) + ' ' + formatTime(order.createdAt),
+              'Table No': order.table === 0 ? 'Parcel' : order.table,
+              'Order ID': order._id ? order._id.toString().slice(-6) : '',
+              'Total Price': Math.round(order.total || 0),
+              Status: order.status || 'completed'
+            });
+          });
+        }
+      }
 
-    const ordersSheet = XLSX.utils.json_to_sheet(allOrders);
-    XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Order Details');
+      const ordersSheet = XLSX.utils.json_to_sheet(allOrders);
+      XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Order Details');
 
-    XLSX.writeFile(workbook, `sales-history-${groupBy}-${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(workbook, `sales-history-${groupBy}-${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (err) {
+      console.error("Excel Export Error: ", err);
+      alert("Error exporting to Excel.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const totalOrders = salesData.reduce((sum, group) => sum + group.totalOrders, 0);
@@ -226,9 +266,40 @@ function SalesHistory() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold text-white">Sales History</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          
+          <div className="flex items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-700">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-sm font-medium">From:</span>
+              <DatePicker
+                selected={startDate}
+                onChange={(date) => setStartDate(date)}
+                selectsStart
+                startDate={startDate}
+                endDate={endDate}
+                placeholderText="Select date"
+                className="custom-date-input"
+                dateFormat="MMM d, yyyy"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-sm font-medium">To:</span>
+              <DatePicker
+                selected={endDate}
+                onChange={(date) => setEndDate(date)}
+                selectsEnd
+                startDate={startDate}
+                endDate={endDate}
+                minDate={startDate}
+                placeholderText="Select date"
+                className="custom-date-input"
+                dateFormat="MMM d, yyyy"
+              />
+            </div>
+          </div>
+
           {isLoading && (
             <div className="flex items-center text-gray-400">
               <Loader2 className="animate-spin mr-2" size={20} />
@@ -246,7 +317,7 @@ function SalesHistory() {
             <option value="monthly">Monthly</option>
           </select>
           <button
-            onClick={exportToPDF}
+            onClick={() => exportToPDF()}
             className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             disabled={isLoading || salesData.length === 0}
           >

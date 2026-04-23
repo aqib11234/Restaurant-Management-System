@@ -2,16 +2,12 @@ const router = require('express').Router();
 const FoodItem = require('../models/FoodItem');
 const { authenticateToken, authenticateAndEnforceLicense } = require('../middleware/auth');
 
-// Public route - no auth required for viewing food items
-router.get('/', async (req, res) => {
+// Protected route - auth required for viewing food items
+router.get('/', authenticateAndEnforceLicense, async (req, res) => {
   try {
-    const { search, category, page = 1, limit = 100, restaurantId } = req.query;
-    const query = { available: true };
-
-    // If restaurantId is provided, filter by it
-    if (restaurantId) {
-      query.restaurantId = restaurantId;
-    }
+    const restaurantId = req.user.restaurantId;
+    const { search, category, page = 1, limit = 100 } = req.query;
+    const query = { available: true, restaurantId };
 
     if (search) {
       query.name = { $regex: search, $options: 'i' };

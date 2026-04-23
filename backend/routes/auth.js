@@ -58,14 +58,20 @@ router.post('/signup', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create owner user
-    const user = new User({
-      email: email.toLowerCase(),
-      passwordHash: hashedPassword,
-      role: 'owner',
-      restaurantId: restaurant._id
-    });
-
-    await user.save();
+    let user;
+    try {
+      user = new User({
+        email: email.toLowerCase(),
+        passwordHash: hashedPassword,
+        role: 'owner',
+        restaurantId: restaurant._id
+      });
+      await user.save();
+    } catch (userError) {
+      // Rollback: Delete the newly created restaurant if user creation fails
+      await Restaurant.findByIdAndDelete(restaurant._id);
+      throw userError;
+    }
 
     // Create JWT token with restaurantId
     const tokenPayload = {

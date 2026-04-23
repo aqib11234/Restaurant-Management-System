@@ -100,13 +100,17 @@ function App() {
     );
   }
 
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const restaurantName = user?.restaurantName || '777 Cafe';
+
   return (
     <OrderUpdateContext.Provider value={{ orderUpdateTrigger, triggerOrderUpdate }}>
       <div className="flex min-h-screen bg-gray-900">
         {/* Sidebar */}
         <div className="fixed left-0 top-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-10">
           <div className="p-6">
-            <h1 className="text-2xl font-bold text-white mb-8">777 Cafe</h1>
+            <h1 className="text-2xl font-bold text-white mb-8">{restaurantName}</h1>
             <nav className="space-y-2">
               {menuItems.map(item => {
                 const Icon = item.icon;

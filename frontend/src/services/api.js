@@ -17,6 +17,14 @@ if (!API_BASE_URL.includes('/api')) {
 
 // Helper function to handle API responses
 const handleApiResponse = async (response) => {
+    if (response.status === 401 || response.status === 403) {
+        // Clear stale session
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        throw new Error('Session expired. Please log in again.');
+    }
+
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Network error' }));
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
@@ -49,9 +57,10 @@ const api = {
     },
 
     // Dashboard API
-    getDashboardStats: async () => {
+    getDashboardStats: async (params = {}) => {
         const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
+        const queryString = new URLSearchParams(params).toString();
+        const response = await fetch(`${API_BASE_URL}/dashboard/stats${queryString ? `?${queryString}` : ''}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
@@ -61,8 +70,13 @@ const api = {
 
     // Food Items API
     getFoodItems: async (params = {}) => {
+        const token = localStorage.getItem('token');
         const queryString = new URLSearchParams(params).toString();
-        const response = await fetch(`${API_BASE_URL}/food-items?${queryString}`);
+        const response = await fetch(`${API_BASE_URL}/food-items?${queryString}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
         return handleApiResponse(response);
     },
 
@@ -214,7 +228,12 @@ const api = {
 
     // Categories API
     getCategories: async () => {
-        const response = await fetch(`${API_BASE_URL}/categories`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/categories`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
         return handleApiResponse(response);
     },
 };
