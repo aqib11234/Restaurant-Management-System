@@ -62,7 +62,7 @@ function SignupForm({ onSignup }) {
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+          <div className="mb-4 p-4 bg-red-900 bg-opacity-50 border border-red-700 rounded text-red-200 text-sm">
             {error}
           </div>
         )}

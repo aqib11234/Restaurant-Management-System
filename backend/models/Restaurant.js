@@ -50,6 +50,28 @@ const restaurantSchema = new mongoose.Schema({
         // Can be manually set to false to deactivate a restaurant
     },
 
+    // Number of dine-in tables shown on the Place Order screen
+    tableCount: {
+        type: Number,
+        default: 20,
+        min: 1,
+        max: 200
+    },
+
+    // IANA timezone used to decide when the business day and month end
+    timezone: {
+        type: String,
+        default: 'Asia/Karachi'
+    },
+
+    // Hour (0-23, local time) when the business day ends and the next begins
+    dayStartHour: {
+        type: Number,
+        default: 4,
+        min: 0,
+        max: 23
+    },
+
     // Additional metadata
     createdAt: {
         type: Date,

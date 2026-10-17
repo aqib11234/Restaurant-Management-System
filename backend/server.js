@@ -34,6 +34,8 @@ mongoose.connect(MONGODB_URI, {
     process.exit(1);
   });
 
+const adminKey = require('./middleware/adminKey');
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
@@ -44,6 +46,7 @@ const seedRoutes = require('./routes/seed');
 const adminRoutes = require('./routes/admin');
 const orderTrackingRoutes = require('./routes/orderTracking');
 const migrateRoutes = require('./routes/migrate');
+const waiterRoutes = require('./routes/waiters');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -51,10 +54,12 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/food-items', foodItemRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/sales', salesRoutes);
-app.use('/api/seed', seedRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/seed', adminKey, seedRoutes);
+app.use('/api/admin', adminKey, adminRoutes);
 app.use('/api/order-tracking', orderTrackingRoutes);
 app.use('/api/migrate', migrateRoutes);
+app.use('/api/waiters', waiterRoutes);
+app.use('/api/settings', require('./routes/settings'));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -65,17 +70,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Categories Route
-app.get('/api/categories', async (req, res) => {
-  try {
-    const FoodItem = require('./models/FoodItem');
-    const categories = await FoodItem.distinct('category', { available: true });
-    res.json(categories);
-  } catch (error) {
-    console.error('Get categories error:', error);
-    res.status(500).json({ message: 'Error fetching categories' });
-  }
-});
+// Categories Route (scoped to the signed-in restaurant)
+app.use('/api/categories', require('./routes/categories'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

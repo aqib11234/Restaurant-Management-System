@@ -1,17 +1,20 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const FoodItem = require('../models/FoodItem');
-const MonthlySales = require('../models/MonthlySales');
 const SalesHistory = require('../models/SalesHistory');
 const { authenticateAndEnforceLicense } = require('../middleware/auth');
+const { clockOf, dayKey, monthKey, monthRange, paidBetween } = require('../utils/time');
 
 router.get('/stats', authenticateAndEnforceLicense, async (req, res) => {
   try {
     // Extract restaurantId from JWT (guaranteed to exist by middleware)
     const restaurantId = req.user.restaurantId;
+    // aggregate() does not cast strings to ObjectId, so convert explicitly
+    const restaurantOid = new mongoose.Types.ObjectId(restaurantId);
 
     const totalFoodItems = await FoodItem.countDocuments({ restaurantId, available: true });
-    const totalTables = 20; // Fixed number, could be dynamic
+    const totalTables = req.restaurant.tableCount || 20;
 
     const { startDate, endDate } = req.query;
 
@@ -24,16 +27,20 @@ router.get('/stats', authenticateAndEnforceLicense, async (req, res) => {
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
-      // Include the entire end date
-      end.setHours(23, 59, 59, 999);
+      if (isNaN(start) || isNaN(end)) {
+        return res.status(400).json({ message: 'Invalid date' });
+      }
+      // A date-only value means "through the end of that day"; full timestamps are used as sent
+      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) end.setUTCHours(23, 59, 59, 999);
+      const endExclusive = new Date(end.getTime() + 1);
 
       // Fetch aggregated data for the selected period directly from Orders
       const orderStats = await Order.aggregate([
         { 
           $match: { 
-            restaurantId, 
+            restaurantId: restaurantOid, 
             status: 'completed',
-            createdAt: { $gte: start, $lte: end }
+            ...paidBetween(start, endExclusive)
           } 
         },
         {
@@ -53,16 +60,16 @@ router.get('/stats', authenticateAndEnforceLicense, async (req, res) => {
 
       pendingOrders = await Order.countDocuments({ 
         restaurantId, 
-        status: { $ne: 'completed' },
+        status: 'pending',
         createdAt: { $gte: start, $lte: end }
       });
 
       topDishes = await Order.aggregate([
         { 
           $match: { 
-            restaurantId, 
+            restaurantId: restaurantOid, 
             status: 'completed',
-            createdAt: { $gte: start, $lte: end }
+            ...paidBetween(start, endExclusive)
           } 
         },
         { $unwind: '$items' },
@@ -72,56 +79,24 @@ router.get('/stats', authenticateAndEnforceLicense, async (req, res) => {
         { $project: { name: '$_id', sales: 1, _id: 0 } }
       ]);
     } else {
-      // Get daily sales from SalesHistory (persistent, not affected by deletions)
+      // Today and this month follow the restaurant's clock, so both reset at
+      // local midnight and on the 1st. Figures come from SalesHistory, which
+      // keeps sales even if orders are later deleted.
+      const clock = clockOf(req.restaurant);
       const now = new Date();
-      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const [dailyDoc, monthlyDoc] = await Promise.all([
+        SalesHistory.findOne({ restaurantId, date: dayKey(now, clock), period: 'daily' }),
+        SalesHistory.findOne({ restaurantId, date: monthKey(now, clock), period: 'monthly' })
+      ]);
+      dailySales = dailyDoc ? dailyDoc.revenue : 0;
+      monthlySales = monthlyDoc ? monthlyDoc.revenue : 0;
+      completedOrders = monthlyDoc ? monthlyDoc.orders : 0;
 
-      const dailySalesDoc = await SalesHistory.findOne({
-        restaurantId,
-        date: today,
-        period: 'daily'
-      });
-      dailySales = dailySalesDoc ? dailySalesDoc.revenue : 0;
+      pendingOrders = await Order.countDocuments({ restaurantId, status: 'pending' });
 
-      // Check if we need to finalize previous months
-      const currentYear = now.getUTCFullYear();
-      const currentMonth = now.getUTCMonth() + 1;
-
-      const previousMonths = await MonthlySales.find({
-        restaurantId,
-        $or: [
-          { year: { $lt: currentYear } },
-          { year: currentYear, month: { $lt: currentMonth } }
-        ]
-      });
-
-      // Save previous months to SalesHistory
-      for (const month of previousMonths) {
-        const monthDate = new Date(month.year, month.month - 1, 1);
-        await SalesHistory.findOneAndUpdate(
-          { restaurantId, date: monthDate, period: 'monthly' },
-          {
-            restaurantId,
-            orders: month.totalOrders,
-            revenue: month.totalSales,
-            updatedAt: new Date()
-          },
-          { upsert: true, new: true }
-        );
-        await MonthlySales.findOneAndDelete({ _id: month._id, restaurantId });
-      }
-
-      // Get current monthly sales from MonthlySales collection
-      const monthlySalesDoc = await MonthlySales.findOne({ restaurantId, year: currentYear, month: currentMonth });
-      monthlySales = monthlySalesDoc ? monthlySalesDoc.totalSales : 0;
-
-      const allMonthlySales = await MonthlySales.find({ restaurantId });
-      completedOrders = allMonthlySales.reduce((sum, month) => sum + month.totalOrders, 0);
-      
-      pendingOrders = await Order.countDocuments({ restaurantId, status: { $ne: 'completed' } });
-
+      const [monthStart, monthEnd] = monthRange(now, clock);
       topDishes = await Order.aggregate([
-        { $match: { restaurantId, status: 'completed' } },
+        { $match: { restaurantId: restaurantOid, status: 'completed', ...paidBetween(monthStart, monthEnd) } },
         { $unwind: '$items' },
         { $group: { _id: '$items.name', sales: { $sum: '$items.quantity' } } },
         { $sort: { sales: -1 } },

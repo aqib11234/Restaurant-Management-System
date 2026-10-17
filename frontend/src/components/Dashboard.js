@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { UtensilsCrossed, DollarSign, Users, TrendingUp, Loader2 } from 'lucide-react';
+import { UtensilsCrossed, DollarSign, Users, TrendingUp, Loader2, UserCheck } from 'lucide-react';
 import api from '../services/api';
 import { OrderUpdateContext } from '../App';
 import DatePicker from 'react-datepicker';
@@ -16,6 +16,7 @@ function Dashboard() {
     completedOrders: 0
   });
   const [topSellingDishes, setTopSellingDishes] = useState([]);
+  const [waiterStats, setWaiterStats] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -56,18 +57,25 @@ function Dashboard() {
       setIsLoading(true);
       const params = {};
       if (startDate && endDate) {
-        // Need to pass as ISO strings or formatted dates that the backend can parse
-        params.startDate = startDate.toISOString();
-        params.endDate = endDate.toISOString();
+        // Send the full local day range so the server's timezone doesn't matter
+        const from = new Date(startDate);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(endDate);
+        to.setHours(23, 59, 59, 999);
+        params.startDate = from.toISOString();
+        params.endDate = to.toISOString();
       }
-      const response = await api.getDashboardStats(params);
+      const [response, waiterResponse] = await Promise.all([
+        api.getDashboardStats(params),
+        api.getWaiterStats(params)
+      ]);
       
       if (response.error) {
         throw new Error(response.error);
       }
 
       setStats({
-        totalTables: parseInt(localStorage.getItem('totalTables')) || 20,
+        totalTables: response.totalTables || 20,
         totalFoodItems: response.totalFoodItems || 0,
         dailySales: response.dailySales || 0,
         monthlySales: response.monthlySales || 0,
@@ -76,9 +84,9 @@ function Dashboard() {
       });
 
       setTopSellingDishes(response.topSellingDishes || []);
+      setWaiterStats(waiterResponse.waiterStats || []);
       setError('');
 
-      // Store last fetch time for day change detection
       localStorage.setItem('lastDashboardFetch', new Date().toISOString());
     } catch (err) {
       setError(err.message || 'Failed to fetch dashboard data');
@@ -103,7 +111,7 @@ function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <h1 className="text-3xl font-bold text-white">Dashboard</h1>
         
-        <div className="flex items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-700">
+        <div className="flex flex-wrap items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-700">
           <div className="flex items-center gap-2">
             <span className="text-gray-400 text-sm font-medium">From:</span>
             <DatePicker
@@ -148,7 +156,7 @@ function Dashboard() {
       )}
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-8">
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500 transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
@@ -196,9 +204,9 @@ function Dashboard() {
           <h3 className="text-xl font-semibold text-white mb-4">Order Status</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-gray-300">Total Orders</span>
-              <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                {stats.pendingOrders + stats.completedOrders}
+              <span className="text-gray-300">Open orders</span>
+              <span className="bg-yellow-500 text-gray-900 px-3 py-1 rounded-full text-sm font-bold">
+                {stats.pendingOrders}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -223,6 +231,60 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Waiter Performance */}
+      {waiterStats.length > 0 && (
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 mt-6">
+          <div className="flex items-center gap-3 mb-5">
+            <UserCheck className="text-green-500" size={22} />
+            <h3 className="text-xl font-semibold text-white">Waiter Performance</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left">
+                  <th className="pb-3 text-gray-400 font-medium text-sm">Waiter</th>
+                  <th className="pb-3 text-gray-400 font-medium text-sm text-center">Today's Orders</th>
+                  <th className="pb-3 text-gray-400 font-medium text-sm text-center">Monthly Orders</th>
+                  <th className="pb-3 text-gray-400 font-medium text-sm text-center">Total Orders</th>
+                  <th className="pb-3 text-gray-400 font-medium text-sm text-right">Total Sales</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waiterStats.map((w) => (
+                  <tr key={w._id} className="border-t border-gray-700">
+                    <td className="py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-green-500 bg-opacity-20 flex items-center justify-center">
+                          <span className="text-green-400 font-bold text-xs">{w.name.charAt(0)}</span>
+                        </div>
+                        <div>
+                          <p className="text-white font-medium text-sm">{w.name}</p>
+                          {!w.isActive && <p className="text-gray-500 text-xs">Inactive</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 text-center">
+                      <span className="text-gray-300 text-sm">{w.todayOrders}</span>
+                    </td>
+                    <td className="py-3 text-center">
+                      <span className="text-gray-300 text-sm">{w.monthOrders}</span>
+                    </td>
+                    <td className="py-3 text-center">
+                      <span className="bg-blue-500 bg-opacity-20 text-blue-400 px-2 py-0.5 rounded-full text-xs font-semibold">
+                        {w.totalOrders}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <span className="text-green-500 font-semibold text-sm">PKR {w.totalSales.toLocaleString()}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

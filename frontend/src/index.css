@@ -133,3 +133,16 @@ code {
 .custom-date-input::placeholder {
   color: #9ca3af;
 }
+/* Viewport-relative heights (JIT arbitrary values are not available in this Tailwind build) */
+.max-h-70vh { max-height: 70vh; }
+.max-h-90vh { max-height: 90vh; }
+
+/* Order bill: bottom sheet on small screens, full-height column on desktop */
+.bill-panel { max-height: 60vh; }
+@media (min-width: 1024px) {
+  .bill-panel { max-height: calc(100vh - 3rem); }
+}
+
+/* Horizontally scrolling chip rows: swipe to scroll, no bar */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

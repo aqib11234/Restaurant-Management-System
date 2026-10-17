@@ -1,6 +1,15 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const FoodItem = require('../models/FoodItem');
 const { authenticateToken, authenticateAndEnforceLicense } = require('../middleware/auth');
+
+function validateFood({ name, price, category }) {
+  if (!name || !String(name).trim()) return 'Name is required';
+  if (!category || !String(category).trim()) return 'Category is required';
+  const p = Number(price);
+  if (price === '' || price == null || !Number.isFinite(p) || p < 0 || p > 10000) return 'Price must be a number between 0 and 10000';
+  return null;
+}
 
 // Protected route - auth required for viewing food items
 router.get('/', authenticateAndEnforceLicense, async (req, res) => {
@@ -40,6 +49,9 @@ router.post('/', authenticateAndEnforceLicense, async (req, res) => {
     const restaurantId = req.user.restaurantId;
     const { name, price, category, image, description } = req.body;
 
+    const err = validateFood({ name, price, category });
+    if (err) return res.status(400).json({ message: err });
+
     const foodItem = new FoodItem({
       restaurantId,
       name,
@@ -63,16 +75,18 @@ router.put('/:id', authenticateAndEnforceLicense, async (req, res) => {
     const { id } = req.params;
     const { name, price, category, image, description } = req.body;
 
+    if (!mongoose.isValidObjectId(id)) return res.status(404).json({ message: 'Food item not found' });
+    const err = validateFood({ name, price, category });
+    if (err) return res.status(400).json({ message: err });
+
+    const update = { name, price: parseFloat(price), category };
+    if (image) update.image = image;
+    if (description !== undefined) update.description = description;
+
     const foodItem = await FoodItem.findOneAndUpdate(
       { _id: id, restaurantId },
-      {
-        name,
-        price: parseFloat(price),
-        category,
-        image,
-        description
-      },
-      { new: true }
+      update,
+      { new: true, runValidators: true }
     );
 
     if (!foodItem) {
@@ -91,6 +105,7 @@ router.delete('/:id', authenticateAndEnforceLicense, async (req, res) => {
     const restaurantId = req.user.restaurantId;
     const { id } = req.params;
 
+    if (!mongoose.isValidObjectId(id)) return res.status(404).json({ message: 'Food item not found' });
     const foodItem = await FoodItem.findOneAndUpdate(
       { _id: id, restaurantId },
       { available: false },

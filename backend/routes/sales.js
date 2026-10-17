@@ -1,13 +1,19 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const SalesHistory = require('../models/SalesHistory');
 const { authenticateAndEnforceLicense } = require('../middleware/auth');
+const { clockOf, rangeForKey, paidBetween } = require('../utils/time');
 
 // Original sales endpoint for backward compatibility
 router.get('/', authenticateAndEnforceLicense, async (req, res) => {
   try {
     const restaurantId = req.user.restaurantId;
     const { period = 'daily', startDate, endDate } = req.query;
+
+    if ((startDate && isNaN(new Date(startDate))) || (endDate && isNaN(new Date(endDate)))) {
+      return res.status(400).json({ message: 'Invalid date' });
+    }
 
     let salesData;
 
@@ -33,12 +39,12 @@ router.get('/', authenticateAndEnforceLicense, async (req, res) => {
       last4Weeks.setDate(last4Weeks.getDate() - 28);
 
       salesData = await SalesHistory.aggregate([
-        { $match: { period: 'daily', date: { $gte: last4Weeks } } },
+        { $match: { restaurantId: new mongoose.Types.ObjectId(restaurantId), period: 'daily', date: { $gte: last4Weeks } } },
         {
           $group: {
             _id: {
-              year: { $year: '$date' },
-              week: { $week: '$date' }
+              year: { $isoWeekYear: '$date' },
+              week: { $isoWeek: '$date' }
             },
             orders: { $sum: '$orders' },
             revenue: { $sum: '$revenue' }
@@ -89,6 +95,10 @@ router.get('/history', authenticateAndEnforceLicense, async (req, res) => {
     const restaurantId = req.user.restaurantId;
     const { groupBy = 'daily', startDate, endDate } = req.query;
 
+    if ((startDate && isNaN(new Date(startDate))) || (endDate && isNaN(new Date(endDate)))) {
+      return res.status(400).json({ message: 'Invalid date' });
+    }
+
     let dateFilter = {};
     if (startDate && endDate) {
       dateFilter = {
@@ -132,21 +142,21 @@ router.get('/history', authenticateAndEnforceLicense, async (req, res) => {
       const weeklyMap = new Map();
 
       dailyData.forEach(day => {
-        const year = day.date.getFullYear();
-        const week = Math.ceil((day.date.getDate() - day.date.getDay() + 1) / 7);
-        const weekKey = `${year}-W${week}`;
+        // Weeks start on Sunday (matches /orders/weekly/:date); dates are stored as UTC midnight
+        const weekStart = new Date(day.date);
+        weekStart.setUTCDate(day.date.getUTCDate() - day.date.getUTCDay());
+        const weekKey = weekStart.toISOString();
 
         if (!weeklyMap.has(weekKey)) {
-          const weekStart = new Date(day.date);
-          weekStart.setDate(day.date.getDate() - day.date.getDay());
           const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekStart.getDate() + 6);
+          weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
 
           weeklyMap.set(weekKey, {
             period: 'weekly',
+            date: weekStart.toISOString(),
             weekStart,
             weekEnd,
-            displayName: `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+            displayName: `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`,
             totalOrders: 0,
             totalRevenue: 0,
             orders: []
@@ -174,7 +184,7 @@ router.get('/history', authenticateAndEnforceLicense, async (req, res) => {
       salesData = salesData.map(month => ({
         period: 'monthly',
         date: month.date.toISOString(),
-        displayName: month.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+        displayName: month.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', timeZone: 'UTC' }),
         totalOrders: month.orders,
         totalRevenue: month.revenue,
         orders: [] // Will be loaded on demand
@@ -195,58 +205,25 @@ router.get('/orders/:period/:date', authenticateAndEnforceLicense, async (req, r
     const { period, date } = req.params;
     const { page = 1, limit = 50 } = req.query;
 
-    let startDate, endDate;
-
     const dateObj = new Date(date);
-
-    if (period === 'daily') {
-      startDate = new Date(Date.UTC(
-        dateObj.getUTCFullYear(),
-        dateObj.getUTCMonth(),
-        dateObj.getUTCDate()
-      ));
-      endDate = new Date(startDate);
-      endDate.setUTCDate(startDate.getUTCDate() + 1);
-    } else if (period === 'monthly') {
-      startDate = new Date(Date.UTC(
-        dateObj.getUTCFullYear(),
-        dateObj.getUTCMonth(),
-        1
-      ));
-      endDate = new Date(startDate);
-      endDate.setUTCMonth(startDate.getUTCMonth() + 1);
-    } else if (period === 'weekly') {
-      // For weekly, we need to calculate the week start and end
-      const weekStart = new Date(dateObj);
-      weekStart.setUTCDate(dateObj.getUTCDate() - dateObj.getUTCDay());
-      startDate = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate()));
-      endDate = new Date(startDate);
-      endDate.setUTCDate(startDate.getUTCDate() + 7);
-    } else {
+    if (isNaN(dateObj)) {
+      return res.status(400).json({ message: 'Invalid date' });
+    }
+    if (!['daily', 'weekly', 'monthly'].includes(period)) {
       return res.status(400).json({ message: 'Invalid period' });
     }
 
-    const orders = await Order.find({
-      restaurantId,
-      status: 'completed',
-      createdAt: {
-        $gte: startDate,
-        $lt: endDate
-      }
-    })
-      .sort({ createdAt: -1 })
+    // date is a stored day/month/week-start key; turn it into the local business-day range
+    const [startDate, endDate] = rangeForKey(dateObj, period, clockOf(req.restaurant));
+    const paidFilter = { restaurantId, status: 'completed', ...paidBetween(startDate, endDate) };
+
+    const orders = await Order.find(paidFilter)
+      .sort({ paidAt: -1, createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .select('_id table total createdAt items');
+      .select('_id table total createdAt paidAt items waiterName amountReceived');
 
-    const total = await Order.countDocuments({
-      restaurantId,
-      status: 'completed',
-      createdAt: {
-        $gte: startDate,
-        $lt: endDate
-      }
-    });
+    const total = await Order.countDocuments(paidFilter);
 
     res.json({
       orders,
@@ -260,5 +237,56 @@ router.get('/orders/:period/:date', authenticateAndEnforceLicense, async (req, r
   }
 });
 
+
+// Breakdown behind the PDF report: best-selling dishes, sales per waiter and,
+// for a single period, every paid order. Either period+date (one stored
+// period) or start+end (ISO instants) choose the range; neither means all time.
+router.get('/breakdown', authenticateAndEnforceLicense, async (req, res) => {
+  try {
+    const restaurantOid = new mongoose.Types.ObjectId(req.user.restaurantId);
+    const { period, date, start, end, includeOrders } = req.query;
+
+    let range = null;
+    if (period && date) {
+      const key = new Date(date);
+      if (isNaN(key) || !['daily', 'weekly', 'monthly'].includes(period)) {
+        return res.status(400).json({ message: 'Invalid period' });
+      }
+      range = rangeForKey(key, period, clockOf(req.restaurant));
+    } else if (start && end) {
+      const s = new Date(start), e = new Date(end);
+      if (isNaN(s) || isNaN(e)) return res.status(400).json({ message: 'Invalid date' });
+      range = [s, new Date(e.getTime() + 1)];
+    }
+
+    const match = { restaurantId: restaurantOid, status: 'completed', ...(range && paidBetween(range[0], range[1])) };
+
+    const [dishes, waiters, orders] = await Promise.all([
+      Order.aggregate([
+        { $match: match },
+        { $unwind: '$items' },
+        { $group: { _id: '$items.name', quantity: { $sum: '$items.quantity' }, revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } } } },
+        { $sort: { revenue: -1 } },
+        { $limit: 10 },
+        { $project: { _id: 0, name: '$_id', quantity: 1, revenue: 1 } }
+      ]),
+      Order.aggregate([
+        { $match: match },
+        { $group: { _id: { $cond: [{ $gt: [{ $strLenCP: { $ifNull: ['$waiterName', ''] } }, 0] }, '$waiterName', 'No waiter'] }, orders: { $sum: 1 }, revenue: { $sum: '$total' } } },
+        { $sort: { revenue: -1 } },
+        { $project: { _id: 0, name: '$_id', orders: 1, revenue: 1 } }
+      ]),
+      includeOrders
+        ? Order.find(match).sort({ paidAt: 1, createdAt: 1 }).limit(1000)
+          .select('table total createdAt paidAt items waiterName').lean()
+        : Promise.resolve(undefined)
+    ]);
+
+    res.json({ dishes, waiters, ...(orders && { orders }) });
+  } catch (error) {
+    console.error('Sales breakdown error:', error);
+    res.status(500).json({ message: 'Error building sales report' });
+  }
+});
 
 module.exports = router;

@@ -19,24 +19,13 @@ function Tables() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  const categories = [
-    'all',
-    '🍳 777 Nashta',
-    '🫓 777 Paratha',
-    '🍖 777 Mutton Karahi',
-    '🍗 777 Chicken Karahi',
-    '🔥 777 BBQ',
-    '🌯 Chicken Rolls',
-    '🥩 Beef Rolls',
-    '🍗 Nuggets',
-    '🍟 Fries',
-    '🥤 Fresh Juice',
-    '🍹 Margarita',
-    '🍔 777 Burgers',
-    '🌯 Shawarma Rolls',
-    '🍨 Ice Creams',
-    '🍛 Other Items'
-  ];
+  const [categories, setCategories] = useState(['all']);
+
+  useEffect(() => {
+    api.getCategories()
+      .then(list => setCategories(['all', ...list]))
+      .catch(err => console.error('Error fetching categories:', err));
+  }, []);
 
   useEffect(() => {
     fetchOrders();
@@ -235,16 +224,16 @@ function Tables() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
         {tables.map(table => (
           <div
             key={table.number}
-            className={`bg-gray-800 rounded-xl border border-gray-700 p-6 hover:border-green-500 transition-all duration-300 cursor-pointer ${
+            className={`bg-gray-800 rounded-xl border border-gray-700 p-4 md:p-6 hover:border-green-500 transition-all duration-300 cursor-pointer ${
               table.order ? 'border-orange-500' : 'border-gray-700'
             }`}
             onClick={() => handleViewOrder(table)}
           >
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-white">
                 {table.number === 0 ? 'Parcel' : `Table ${table.number}`}
               </h3>
@@ -356,7 +345,7 @@ function Tables() {
       {/* Add Items Modal */}
       {showAddItems && selectedTable && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
-          <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-6xl max-h-90vh overflow-hidden flex flex-col">
             {/* Header - Fixed */}
             <div className="p-4 border-b border-gray-700 flex-shrink-0">
               <div className="flex justify-between items-center">
@@ -537,7 +526,7 @@ function Tables() {
       {/* Order Details Modal */}
       {showOrderDetails && selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl border border-gray-700 max-h-[90vh] overflow-y-auto">
+          <div className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl border border-gray-700 max-h-90vh overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-3xl font-bold text-white">
                 Order Details - {selectedTable.number === 0 ? 'Parcel' : `Table ${selectedTable.number}`}

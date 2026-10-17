@@ -20,14 +20,22 @@ const Restaurant = require('../models/Restaurant');
  */
 router.post('/signup', async (req, res) => {
   try {
-    const { restaurantName, email, password } = req.body;
+    const { password } = req.body;
+    const restaurantName = typeof req.body.restaurantName === 'string' ? req.body.restaurantName.trim() : '';
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
 
     // Validate input
-    if (!restaurantName || !email || !password) {
+    if (!restaurantName || !email || typeof password !== 'string' || !password) {
       return res.status(400).json({
         success: false,
         message: 'Restaurant name, email, and password are required'
       });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
     }
 
     // Check if email already exists
@@ -119,10 +127,11 @@ router.post('/signup', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
 
     // Validate input
-    if (!email || !password) {
+    if (!email || typeof password !== 'string' || !password) {
       return res.status(400).json({
         success: false,
         message: 'Email and password are required'

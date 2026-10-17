@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { ChevronDown, ChevronRight, Download, FileText, Table, Loader2, Calendar, DollarSign, ShoppingCart } from 'lucide-react';
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
+import { ChevronDown, ChevronRight, FileText, Loader2, Calendar, DollarSign, ShoppingCart } from 'lucide-react';
+import { buildSalesReport, periodName } from '../utils/salesReport';
 import api from '../services/api';
 import { OrderUpdateContext } from '../App';
 import DatePicker from 'react-datepicker';
@@ -15,6 +14,7 @@ function SalesHistory() {
   const [error, setError] = useState('');
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [loadingOrders, setLoadingOrders] = useState(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
@@ -28,8 +28,13 @@ function SalesHistory() {
       setIsLoading(true);
       const params = { groupBy };
       if (startDate && endDate) {
-        params.startDate = startDate.toISOString();
-        params.endDate = endDate.toISOString();
+        // Send the full local day range so the server's timezone doesn't matter
+        const from = new Date(startDate);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(endDate);
+        to.setHours(23, 59, 59, 999);
+        params.startDate = from.toISOString();
+        params.endDate = to.toISOString();
       }
       const response = await api.getSalesHistory(params);
       setSalesData(response || []);
@@ -104,165 +109,54 @@ function SalesHistory() {
 
   const exportToPDF = async (selectedGroup = null) => {
     try {
-      setIsLoading(true);
-      const doc = new jsPDF();
-      let dataToExport = selectedGroup ? [selectedGroup] : [...salesData];
+      setIsExporting(true);
+      const restaurantName = (() => {
+        try { return JSON.parse(localStorage.getItem('user') || '{}').restaurantName || 'Restaurant'; } catch { return 'Restaurant'; }
+      })();
+      const day = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-      // Ensure orders are loaded for all groups being exported
-      for (let i = 0; i < dataToExport.length; i++) {
-        if (!dataToExport[i].orders || dataToExport[i].orders.length === 0) {
-          const fetchedOrders = await fetchGroupOrders(dataToExport[i]);
-          dataToExport[i] = { ...dataToExport[i], orders: fetchedOrders };
-        }
-      }
-
-      // Safe filename generation
-      const timestamp = new Date().toISOString().split('T')[0];
-      let fileName;
-      if (selectedGroup && selectedGroup.displayName) {
-        const safeName = selectedGroup.displayName.toString().replace(/\s+/g, '-').toLowerCase();
-        fileName = `sales-${safeName}-${timestamp}.pdf`;
+      let report;
+      if (selectedGroup) {
+        const breakdown = await api.getSalesBreakdown({ period: selectedGroup.period, date: selectedGroup.date, includeOrders: 1 });
+        const word = { daily: 'Day', weekly: 'Week', monthly: 'Month' }[selectedGroup.period] || 'Period';
+        const name = periodName(selectedGroup.displayName);
+        report = {
+          title: `${word} report`,
+          rangeLabel: name,
+          groups: [selectedGroup],
+          ...breakdown,
+        };
       } else {
-        fileName = `sales-history-${groupBy}-${timestamp}.pdf`;
+        const params = {};
+        if (startDate && endDate) {
+          const from = new Date(startDate); from.setHours(0, 0, 0, 0);
+          const to = new Date(endDate); to.setHours(23, 59, 59, 999);
+          params.start = from.toISOString();
+          params.end = to.toISOString();
+        }
+        const breakdown = await api.getSalesBreakdown(params);
+        report = {
+          title: 'Sales report',
+          rangeLabel: startDate && endDate ? `${day(startDate)} to ${day(endDate)}` : 'All time',
+          groups: salesData,
+          ...breakdown,
+        };
       }
 
-      // Header
-      doc.setFontSize(20);
-      const title = selectedGroup && selectedGroup.displayName
-        ? `${selectedGroup.displayName} Sales Report`
-        : 'Sales History Report';
-      doc.text(title, 20, 20);
-
-      doc.setFontSize(12);
-      doc.text(`Grouped by: ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}`, 20, 35);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 45);
-
-      let yPosition = 60;
-      doc.setFontSize(10);
-
-      if (!selectedGroup && dataToExport.length > 0) {
-        // Summary
-        doc.setFontSize(14);
-        doc.text('Summary:', 20, yPosition);
-        yPosition += 15;
-        doc.setFontSize(10);
-
-        const totalOrders = dataToExport.reduce((sum, group) => sum + (group.totalOrders || 0), 0);
-        const totalRevenue = dataToExport.reduce((sum, group) => sum + (group.totalRevenue || 0), 0);
-
-        doc.text(`Total Groups: ${dataToExport.length}`, 20, yPosition);
-        yPosition += 8;
-        doc.text(`Total Orders: ${totalOrders}`, 20, yPosition);
-        yPosition += 8;
-        doc.text(`Total Revenue: PKR ${Math.round(totalRevenue)}`, 20, yPosition);
-        yPosition += 8;
-        doc.text(`Average Revenue: PKR ${Math.round(totalRevenue / dataToExport.length)}`, 20, yPosition);
-
-        yPosition += 20;
-      }
-
-      // Group details
-      dataToExport.forEach((group) => {
-        if (!group) return;
-
-        if (yPosition > 250) {
-          doc.addPage();
-          yPosition = 20;
-        }
-
-        doc.setFontSize(12);
-        doc.text(group.displayName || 'Unknown Period', 20, yPosition);
-        yPosition += 10;
-        doc.setFontSize(10);
-        doc.text(`Orders: ${group.totalOrders || 0} | Revenue: PKR ${Math.round(group.totalRevenue || 0)}`, 30, yPosition);
-        yPosition += 10;
-
-        // Order details
-        if (group.orders && Array.isArray(group.orders)) {
-          group.orders.forEach(order => {
-            if (!order) return;
-
-            if (yPosition > 270) {
-              doc.addPage();
-              yPosition = 20;
-            }
-
-            const orderDate = order.createdAt ? formatDate(order.createdAt) : 'N/A';
-            const orderTime = order.createdAt ? formatTime(order.createdAt) : '';
-            const tableInfo = order.table === 0 ? 'Parcel' : `Table ${order.table || 'N/A'}`;
-            const total = Math.round(order.total || 0);
-
-            doc.text(`  ${orderDate} ${orderTime} - ${tableInfo} - PKR ${total}`, 40, yPosition);
-            yPosition += 6;
-          });
-        }
-
-        yPosition += 10;
-      });
-
-      doc.save(fileName);
+      const doc = buildSalesReport({ restaurantName, groupBy: selectedGroup ? selectedGroup.period : groupBy, ...report });
+      const slug = (selectedGroup ? `${selectedGroup.period}-${selectedGroup.displayName}` : `${groupBy}-${startDate && endDate ? `${day(startDate)}-to-${day(endDate)}` : 'all-time'}`)
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      doc.save(`sales-report-${slug}.pdf`);
     } catch (error) {
       console.error('PDF Export Error:', error);
-      alert('Error exporting PDF. Please try again.');
+      setError(error.message || 'Could not create the PDF. Try again.');
     } finally {
-      setIsLoading(false);
+      setIsExporting(false);
     }
   };
 
-  const exportToExcel = async () => {
-    try {
-      setIsLoading(true);
-      const workbook = XLSX.utils.book_new();
-
-      // Summary sheet
-      const summaryData = salesData.map(group => ({
-        Period: group.displayName,
-        Orders: group.totalOrders,
-        Revenue: Math.round(group.totalRevenue),
-        'Avg Order': group.totalOrders > 0 ? Math.round(group.totalRevenue / group.totalOrders) : 0
-      }));
-
-      const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
-
-      // Detailed orders sheet
-      const allOrders = [];
-      
-      // Ensure orders are loaded for all groups
-      for (const group of salesData) {
-        let groupOrders = group.orders;
-        if (!groupOrders || groupOrders.length === 0) {
-          groupOrders = await fetchGroupOrders(group);
-        }
-        
-        if (groupOrders && Array.isArray(groupOrders)) {
-          groupOrders.forEach(order => {
-            allOrders.push({
-              Period: group.displayName,
-              'Order Time': formatDate(order.createdAt) + ' ' + formatTime(order.createdAt),
-              'Table No': order.table === 0 ? 'Parcel' : order.table,
-              'Order ID': order._id ? order._id.toString().slice(-6) : '',
-              'Total Price': Math.round(order.total || 0),
-              Status: order.status || 'completed'
-            });
-          });
-        }
-      }
-
-      const ordersSheet = XLSX.utils.json_to_sheet(allOrders);
-      XLSX.utils.book_append_sheet(workbook, ordersSheet, 'Order Details');
-
-      XLSX.writeFile(workbook, `sales-history-${groupBy}-${new Date().toISOString().split('T')[0]}.xlsx`);
-    } catch (err) {
-      console.error("Excel Export Error: ", err);
-      alert("Error exporting to Excel.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const totalOrders = salesData.reduce((sum, group) => sum + group.totalOrders, 0);
-  const totalRevenue = salesData.reduce((sum, group) => sum + group.totalRevenue, 0);
+  const totalOrders = salesData.reduce((sum, group) => sum + (group.totalOrders || 0), 0);
+  const totalRevenue = salesData.reduce((sum, group) => sum + (group.totalRevenue || 0), 0);
 
   return (
     <div className="p-6">
@@ -270,7 +164,7 @@ function SalesHistory() {
         <h1 className="text-3xl font-bold text-white">Sales History</h1>
         <div className="flex flex-wrap items-center gap-4">
           
-          <div className="flex items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-700">
+          <div className="flex flex-wrap items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-700">
             <div className="flex items-center gap-2">
               <span className="text-gray-400 text-sm font-medium">From:</span>
               <DatePicker
@@ -318,19 +212,11 @@ function SalesHistory() {
           </select>
           <button
             onClick={() => exportToPDF()}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-            disabled={isLoading || salesData.length === 0}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 font-semibold"
+            disabled={isLoading || isExporting || salesData.length === 0}
           >
-            <FileText size={16} />
-            Export PDF
-          </button>
-          <button
-            onClick={exportToExcel}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-            disabled={isLoading || salesData.length === 0}
-          >
-            <Table size={16} />
-            Export Excel
+            {isExporting ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+            {isExporting ? 'Creating PDF…' : 'Download PDF'}
           </button>
         </div>
       </div>
@@ -342,11 +228,11 @@ function SalesHistory() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6">
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500 transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Total Groups</p>
+              <p className="text-gray-400 text-sm">{{ daily: 'Days', weekly: 'Weeks', monthly: 'Months' }[groupBy]} with sales</p>
               <p className="text-3xl font-bold text-white">{salesData.length}</p>
             </div>
             <Calendar className="text-green-500" size={32} />
@@ -356,7 +242,7 @@ function SalesHistory() {
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500 transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Total Orders</p>
+              <p className="text-gray-400 text-sm">Paid orders</p>
               <p className="text-3xl font-bold text-white">{totalOrders}</p>
             </div>
             <ShoppingCart className="text-blue-500" size={32} />
@@ -366,8 +252,8 @@ function SalesHistory() {
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500 transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Total Revenue</p>
-              <p className="text-3xl font-bold text-green-500">PKR {totalRevenue.toFixed(0)}</p>
+              <p className="text-gray-400 text-sm">Total sales</p>
+              <p className="text-3xl font-bold text-green-500">PKR {Math.round(totalRevenue).toLocaleString()}</p>
             </div>
             <DollarSign className="text-green-500" size={32} />
           </div>
@@ -376,9 +262,9 @@ function SalesHistory() {
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-green-500 transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Avg Revenue/Group</p>
+              <p className="text-gray-400 text-sm">Average per {{ daily: 'day', weekly: 'week', monthly: 'month' }[groupBy]}</p>
               <p className="text-3xl font-bold text-white">
-                PKR {salesData.length > 0 ? (totalRevenue / salesData.length).toFixed(0) : '0'}
+                PKR {salesData.length > 0 ? Math.round(totalRevenue / salesData.length).toLocaleString() : '0'}
               </p>
             </div>
             <DollarSign className="text-yellow-500" size={32} />
@@ -407,7 +293,7 @@ function SalesHistory() {
                       <ChevronRight className="text-green-500" size={20} />
                     )}
                     <div>
-                      <h3 className="text-xl font-semibold text-white">{group.displayName}</h3>
+                      <h3 className="text-xl font-semibold text-white">{periodName(group.displayName)}</h3>
                       <p className="text-gray-400 text-sm capitalize">{group.period} Summary</p>
                     </div>
                   </div>
@@ -418,12 +304,12 @@ function SalesHistory() {
                     </div>
                     <div className="text-center">
                       <p className="text-gray-400 text-sm">Revenue</p>
-                      <p className="text-2xl font-bold text-green-500">PKR {Math.round(group.totalRevenue)}</p>
+                      <p className="text-2xl font-bold text-green-500">PKR {Math.round(group.totalRevenue).toLocaleString()}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-gray-400 text-sm">Avg Order</p>
                       <p className="text-xl font-semibold text-white">
-                        PKR {Math.round(group.totalRevenue / group.totalOrders)}
+                        PKR {group.totalOrders ? Math.round(group.totalRevenue / group.totalOrders).toLocaleString() : 0}
                       </p>
                     </div>
                     <button
@@ -431,8 +317,10 @@ function SalesHistory() {
                         e.stopPropagation();
                         exportToPDF(group);
                       }}
-                      className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition-colors"
-                      title="Export this period to PDF"
+                      className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-colors disabled:opacity-50"
+                      title="Download this period as PDF"
+                      aria-label={`Download ${periodName(group.displayName)} as PDF`}
+                      disabled={isExporting}
                     >
                       <FileText size={16} />
                     </button>
@@ -455,29 +343,27 @@ function SalesHistory() {
                         <table className="w-full">
                           <thead className="bg-gray-700">
                             <tr>
-                              <th className="px-4 py-3 text-left text-gray-300 font-semibold">Order Time</th>
-                              <th className="px-4 py-3 text-left text-gray-300 font-semibold">Table No</th>
-                              <th className="px-4 py-3 text-left text-gray-300 font-semibold">Order ID</th>
+                              <th className="px-4 py-3 text-left text-gray-300 font-semibold">Paid at</th>
+                              <th className="px-4 py-3 text-left text-gray-300 font-semibold">Table</th>
+                              <th className="px-4 py-3 text-left text-gray-300 font-semibold">Waiter</th>
                               <th className="px-4 py-3 text-left text-gray-300 font-semibold">Total Price</th>
                               <th className="px-4 py-3 text-left text-gray-300 font-semibold">Items</th>
                             </tr>
                           </thead>
                           <tbody>
                             {group.orders.map((order) => (
-                              <tr key={order._id} className="border-t border-gray-700 hover:bg-gray-750">
+                              <tr key={order._id || order.orderId} className="border-t border-gray-700 hover:bg-gray-750">
                                 <td className="px-4 py-3 text-white">
-                                  {formatDate(order.createdAt)} {formatTime(order.createdAt)}
+                                  {formatDate(order.paidAt || order.createdAt)} {formatTime(order.paidAt || order.createdAt)}
                                 </td>
-                                <td className="px-4 py-3 text-white">{order.table === 0 ? 'Parcel' : `Table ${order.table}`}</td>
-                                <td className="px-4 py-3 text-gray-300 font-mono">
-                                  #{order.orderId.toString().slice(-6)}
-                                </td>
+                                <td className="px-4 py-3 text-white">{order.table === 0 ? 'Takeaway' : `Table ${order.table}`}</td>
+                                <td className="px-4 py-3 text-gray-300">{order.waiterName || '—'}</td>
                                 <td className="px-4 py-3 text-green-500 font-semibold">
-                                  PKR {Math.round(order.total)}
+                                  PKR {Math.round(order.total).toLocaleString()}
                                 </td>
                                 <td className="px-4 py-3 text-gray-300">
-                                  <div className="max-w-xs truncate" title={order.items.map(item => `${item.name} * ${item.quantity}`).join(', ')}>
-                                    {order.items.map(item => `${item.name} * ${item.quantity}`).join(', ')}
+                                  <div className="max-w-xs truncate" title={order.items.map(item => `${item.quantity} × ${item.name}`).join(', ')}>
+                                    {order.items.map(item => `${item.quantity} × ${item.name}`).join(', ')}
                                   </div>
                                 </td>
                               </tr>

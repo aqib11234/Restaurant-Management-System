@@ -18,6 +18,12 @@ if (!API_BASE_URL.includes('/api')) {
 // Helper function to handle API responses
 const handleApiResponse = async (response) => {
     if (response.status === 401 || response.status === 403) {
+        // Licence problems (expired trial, deactivated account) come back as 403 with a code;
+        // keep the reason so the login screen can explain why the user was signed out
+        const body = await response.clone().json().catch(() => ({}));
+        try {
+            if (body.code) sessionStorage.setItem('authNotice', body.error || body.message || '');
+        } catch { /* storage unavailable */ }
         // Clear stale session
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -142,7 +148,7 @@ const api = {
         return handleApiResponse(response);
     },
 
-    updateOrderStatus: async (orderId, status) => {
+    updateOrderStatus: async (orderId, status, extra = {}) => {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
             method: 'PUT',
@@ -150,11 +156,45 @@ const api = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
             },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, ...extra }),
         });
         return handleApiResponse(response);
     },
 
+    setOrderItemQuantity: async (orderId, index, quantity) => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/orders/${orderId}/items/${index}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ quantity }),
+        });
+        return handleApiResponse(response);
+    },
+    changeOrderWaiter: async (orderId, waiterId) => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/orders/${orderId}/waiter`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ waiterId: waiterId || null }),
+        });
+        return handleApiResponse(response);
+    },
+    getSettings: async () => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/settings`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleApiResponse(response);
+    },
+    updateSettings: async (settings) => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(settings),
+        });
+        return handleApiResponse(response);
+    },
     deleteOrder: async (orderId) => {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
@@ -227,12 +267,75 @@ const api = {
     },
 
     // Categories API
+    getSalesBreakdown: async (params = {}) => {
+        const token = localStorage.getItem('token');
+        const queryString = new URLSearchParams(params).toString();
+        const response = await fetch(`${API_BASE_URL}/sales/breakdown?${queryString}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleApiResponse(response);
+    },
     getCategories: async () => {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/categories`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
+        });
+        return handleApiResponse(response);
+    },
+
+    // ── Waiter API ──────────────────────────────────────────────────────────
+
+    getWaiters: async (params = {}) => {
+        const token = localStorage.getItem('token');
+        const queryString = new URLSearchParams(params).toString();
+        const response = await fetch(`${API_BASE_URL}/waiters${queryString ? `?${queryString}` : ''}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleApiResponse(response);
+    },
+
+    getWaiterStats: async (params = {}) => {
+        const token = localStorage.getItem('token');
+        const queryString = new URLSearchParams(params).toString();
+        const response = await fetch(`${API_BASE_URL}/waiters/stats${queryString ? `?${queryString}` : ''}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleApiResponse(response);
+    },
+
+    createWaiter: async (waiterData) => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/waiters`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(waiterData),
+        });
+        return handleApiResponse(response);
+    },
+
+    updateWaiter: async (id, waiterData) => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/waiters/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(waiterData),
+        });
+        return handleApiResponse(response);
+    },
+
+    deleteWaiter: async (id) => {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/waiters/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
         });
         return handleApiResponse(response);
     },

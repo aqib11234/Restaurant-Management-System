@@ -303,7 +303,7 @@ function FoodItems() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-white">Food Items</h1>
         <button 
           onClick={() => setShowAddModal(true)}
@@ -316,7 +316,7 @@ function FoodItems() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded text-red-200">
+        <div className="mb-4 p-4 bg-red-900 bg-opacity-50 border border-red-700 rounded text-red-200">
           {error}
         </div>
       )}
@@ -348,7 +348,7 @@ function FoodItems() {
 
       {/* Food Items Grid */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-        <div className="overflow-auto max-h-[70vh]">
+        <div className="overflow-auto max-h-70vh">
           {isLoading && foodItems.length === 0 ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="animate-spin h-8 w-8 text-green-500" />

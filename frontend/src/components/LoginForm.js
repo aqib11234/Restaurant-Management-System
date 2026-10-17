@@ -5,7 +5,16 @@ import api from '../services/api';
 function LoginForm({ onLogin, onSignupClick }) {
   const [credentials, setCredentials] = useState({ email: '', password: '' });
 
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => {
+    // Explains why the app signed the user out (e.g. trial ended)
+    try {
+      const notice = sessionStorage.getItem('authNotice') || '';
+      sessionStorage.removeItem('authNotice');
+      return notice;
+    } catch {
+      return '';
+    }
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -39,7 +48,7 @@ function LoginForm({ onLogin, onSignupClick }) {
           <p className="text-gray-400 mt-2">Restaurant Management System</p>
         </div>
         {error && (
-          <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
+          <div className="mb-4 p-4 bg-red-900 bg-opacity-50 border border-red-700 rounded text-red-200 text-sm">
             {error}
           </div>
         )}
@@ -98,14 +107,6 @@ function LoginForm({ onLogin, onSignupClick }) {
           >
             Sign up
           </button>
-        </div>
-
-        <div className="mt-6 p-4 bg-gray-700 rounded-lg">
-          <p className="text-gray-300 text-sm text-center">
-            Demo Credentials:<br />
-            <span className="text-green-400 font-medium">Email: admin@777restaurant.com</span><br />
-            <span className="text-green-400 font-medium">Password: admin123</span>
-          </p>
         </div>
       </div>
     </div>
