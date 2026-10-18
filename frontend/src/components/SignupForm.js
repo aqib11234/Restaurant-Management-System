@@ -12,6 +12,9 @@ function SignupForm({ onSignup }) {
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // The free server sleeps when idle; say so if the first request is slow
+  const [isWaking, setIsWaking] = useState(false);
+
 
   const validateForm = () => {
     if (formData.password !== formData.confirmPassword) {
@@ -31,6 +34,7 @@ function SignupForm({ onSignup }) {
 
     setError('');
     setIsLoading(true);
+    const wakeTimer = setTimeout(() => setIsWaking(true), 5000);
 
     try {
       const response = await api.signup({
@@ -45,9 +49,11 @@ function SignupForm({ onSignup }) {
         setError(response.message || 'Signup failed');
       }
     } catch (error) {
-      setError('Server error. Please try again.');
+      setError(error.message === 'Failed to fetch' ? 'Cannot reach the server. Check the internet connection and try again.' : error.message);
       console.error('Signup error:', error);
     } finally {
+      clearTimeout(wakeTimer);
+      setIsWaking(false);
       setIsLoading(false);
     }
   };
@@ -142,6 +148,11 @@ function SignupForm({ onSignup }) {
               'Sign Up'
             )}
           </button>
+          {isWaking && (
+            <p role="status" className="text-yellow-300 text-sm text-center mt-3">
+              Starting the server. The first sign-in after a quiet spell can take up to a minute.
+            </p>
+          )}
         </form>
 
         <p className="mt-6 text-center text-gray-400">

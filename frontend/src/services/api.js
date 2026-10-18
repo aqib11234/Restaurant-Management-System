@@ -38,6 +38,16 @@ const handleApiResponse = async (response) => {
     return response.json();
 };
 
+// Login and signup: a 401 here means wrong details, not an expired session,
+// so show the server's message instead of redirecting
+const handleAuthResponse = async (response) => {
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(body.message || body.error || `Request failed (${response.status})`);
+    }
+    return body;
+};
+
 const api = {
     // Auth API
     signup: async (userData) => {
@@ -48,7 +58,7 @@ const api = {
             },
             body: JSON.stringify(userData),
         });
-        return handleApiResponse(response);
+        return handleAuthResponse(response);
     },
 
     login: async (credentials) => {
@@ -59,7 +69,7 @@ const api = {
             },
             body: JSON.stringify(credentials),
         });
-        return handleApiResponse(response);
+        return handleAuthResponse(response);
     },
 
     // Dashboard API
