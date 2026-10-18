@@ -15,11 +15,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // MongoDB Connection with Atlas optimization
+// On a hosting platform there is no local database, so a missing MONGODB_URI
+// is a setup mistake: say so plainly instead of trying localhost
+if (!process.env.MONGODB_URI && (process.env.NODE_ENV === 'production' || process.env.RENDER)) {
+  console.error('❌ MONGODB_URI is not set. Add it in your host\'s environment settings (e.g. Render > Environment) and redeploy.');
+  process.exit(1);
+}
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/restaurant_management';
 
 mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
 })
