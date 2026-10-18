@@ -16,6 +16,7 @@ export const OrderUpdateContext = createContext();
 // Lazy load components for performance
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const FoodItems = lazy(() => import('./components/FoodItems'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const OrderPlacement = lazy(() => import('./components/OrderPlacement'));
 const OrderTracking = lazy(() => import('./components/OrderTracking'));
 const SalesHistory = lazy(() => import('./components/SalesHistory'));
@@ -87,6 +88,15 @@ function App() {
   };
 
   const [isSignup, setIsSignup] = useState(false);
+
+  // Account management for the software owner, separate from restaurant logins
+  if (window.location.pathname.replace(/\/+$/, '') === '/admin') {
+    return (
+      <Suspense fallback={<LoadingSpinner />}>
+        <AdminPanel />
+      </Suspense>
+    );
+  }
 
   if (!isLoggedIn) {
     return (

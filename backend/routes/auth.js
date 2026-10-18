@@ -166,6 +166,13 @@ router.post('/login', async (req, res) => {
 
     const restaurant = user.restaurantId;
 
+    if (!restaurant.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'This account has been deactivated. Please contact support.'
+      });
+    }
+
     // Create JWT token with restaurantId
     const tokenPayload = {
       userId: user._id,

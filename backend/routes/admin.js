@@ -1,5 +1,18 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const Restaurant = require('../models/Restaurant');
+const User = require('../models/User');
+const Order = require('../models/Order');
+const FoodItem = require('../models/FoodItem');
+
+// Reject malformed ids before they reach Mongoose (which would throw a 500)
+router.use((req, res, next) => {
+    const id = req.body && req.body.restaurantId;
+    if (id !== undefined && !mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid restaurantId' });
+    }
+    next();
+});
 
 /**
  * ADMIN / LICENSE MANAGEMENT ROUTES
@@ -21,6 +34,18 @@ router.get('/restaurants', async (req, res) => {
             .select('name licenseType plan subscriptionEndsAt isActive createdAt')
             .sort({ createdAt: -1 });
 
+        // Owner logins and usage, so accounts can be recognised in the admin page
+        const ids = restaurants.map(r => r._id);
+        const [owners, orderCounts, menuCounts] = await Promise.all([
+            User.find({ restaurantId: { $in: ids } }).select('email restaurantId role').lean(),
+            Order.aggregate([{ $match: { restaurantId: { $in: ids } } }, { $group: { _id: '$restaurantId', n: { $sum: 1 }, last: { $max: '$createdAt' } } }]),
+            FoodItem.aggregate([{ $match: { restaurantId: { $in: ids }, available: true } }, { $group: { _id: '$restaurantId', n: { $sum: 1 } } }])
+        ]);
+        const emailsBy = {}, ordersBy = {}, menuBy = {};
+        owners.forEach(u => { (emailsBy[u.restaurantId] = emailsBy[u.restaurantId] || []).push(u.email); });
+        orderCounts.forEach(o => { ordersBy[o._id] = o; });
+        menuCounts.forEach(m => { menuBy[m._id] = m.n; });
+
         const restaurantsWithStatus = restaurants.map(r => {
             const hasValidLicense = r.hasValidLicense();
             const daysRemaining = r.getDaysRemaining();
@@ -34,7 +59,11 @@ router.get('/restaurants', async (req, res) => {
                 isActive: r.isActive,
                 hasValidLicense,
                 daysRemaining: daysRemaining === Infinity ? 'Lifetime' : daysRemaining,
-                createdAt: r.createdAt
+                createdAt: r.createdAt,
+                emails: emailsBy[r._id] || [],
+                orders: ordersBy[r._id] ? ordersBy[r._id].n : 0,
+                lastOrderAt: ordersBy[r._id] ? ordersBy[r._id].last : null,
+                menuItems: menuBy[r._id] || 0
             };
         });
 
@@ -146,7 +175,9 @@ router.post('/extend-subscription', async (req, res) => {
         }
 
         // Extend subscription
-        const currentEnd = restaurant.subscriptionEndsAt || new Date();
+        // An expired subscription is extended from today, not from its old end date
+        const now = new Date();
+        const currentEnd = restaurant.subscriptionEndsAt && restaurant.subscriptionEndsAt > now ? restaurant.subscriptionEndsAt : now;
         const newEnd = new Date(currentEnd);
         newEnd.setDate(newEnd.getDate() + parseInt(days));
 
